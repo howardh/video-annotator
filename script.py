@@ -3,6 +3,9 @@ import time
 import pickle
 import os
 import argparse
+import tkinter
+
+import gui
 
 def load_annotations(annotations_file_path):
     if os.path.isfile(annotation_file_path):
@@ -56,13 +59,15 @@ class Video(object):
         print('Frame width:', self.width)
         print('Frame height:', self.height)
 
-    def get_frame(self, frame_index, show_annotations=False):
-        self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
+    def get_frame(self, frame_index=None, show_annotations=False):
+        if frame_index is not None:
+            self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         ret, frame = self.cap.read()
         if show_annotations:
-            if frame_index < len(self.interpolated_points) and self.interpolated_points[frame_index] is not None:
-                cv2.circle(frame, center=self.interpolated_points[current_frame],
-                        radius=10, color=(0,255,0), thickness=5, lineType=8, shift=0)
+            for ann_id,interp_ann in self.interpolated_annotations.items():
+                if frame_index < len(interp_ann) and interp_ann[frame_index] is not None:
+                    cv2.circle(frame, center=interp_ann[frame_index],
+                            radius=10, color=(0,255,0), thickness=5, lineType=8, shift=0)
         return frame
 
     def add_annotation(self, frame_index, annotation_id, annotation):
@@ -93,27 +98,10 @@ if __name__=='__main__':
 
     # Load Video
     video = Video(video_file_path, load_annotations(annotation_file_path))
+    print(video.annotations)
 
-    # Setup mouse click callback
-    current_frame = 0
-    cv2.namedWindow('Frame')
-    def set_annotation_coordinate(event, x, y, flags, param):
-        if event == cv2.EVENT_LBUTTONDOWN:
-            points[current_frame] = (x,y)
-            video.add_annotation(current_frame, annotation_id, (x,y))
-            print('Saved point', current_frame, x, y)
-    cv2.setMouseCallback('Frame', set_annotation_coordinate)
-
-    # Loop through frames
-    for current_frame in range(video.frame_count):
-        frame = video.get_frame(current_frame)
-        cv2.imshow('Frame',frame)
-        key = cv2.waitKey(25) & 0xFF
-        if key == ord('q'):
-            break
-        elif key == ord(' '):
-            while cv2.waitKey(0) & 0xFF != ord(' '):
-                pass
+    # Create GUI
+    gui.App(tkinter.Tk(), 'Video Annotator', video)
 
     # Save annotations
     with open(annotation_file_path, 'wb') as f:
