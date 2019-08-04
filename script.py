@@ -25,7 +25,7 @@ def interpolate_annotations(points):
             continue
         diff = (points[end][0]-points[start][0],points[end][1]-points[start][1])
         diff_per_frame = (diff[0]/(end-start),diff[1]/(end-start))
-        for i in range(end-start):
+        for i in range(end-start+1):
             output[start+i] = (int(points[start][0]+diff_per_frame[0]*i),int(points[start][1]+diff_per_frame[1]*i))
     return output
 
