@@ -21,9 +21,14 @@ class App:
         self.window.bind('n', self.jump_to_keyframe_nearest)
         self.window.bind('<Left>', self.jump_to_keyframe_prev)
         self.window.bind('<Right>', self.jump_to_keyframe_next)
+        self.window.bind('<Delete>', self.delete_keyframe)
 
         self.update()
         self.window.mainloop()
+
+    def delete_keyframe(self, event):
+        self.video.remove_annotation(self.current_frame_index, self.annotation_id)
+        self.render_current_frame()
 
     def jump_to_keyframe_nearest(self, event):
         kf_indices = list(self.video.annotations[self.annotation_id].keys())
