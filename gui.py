@@ -4,9 +4,9 @@ import PIL
 import PIL.Image, PIL.ImageTk
 
 class App:
-    def __init__(self, window, window_title, video):
+    def __init__(self, window, video):
         self.window = window
-        self.window.title(window_title)
+        self.window.title('Video Annotator')
         self.video = video
 
         self.paused = False
@@ -50,6 +50,3 @@ class App:
 
         delay = int(1000/self.video.fps)-5
         self.window.after(delay, self.update)
-
-# Create a window and pass it to the Application object
-#App(tkinter.Tk(), 'Video Annotator')

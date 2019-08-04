@@ -7,13 +7,6 @@ import tkinter
 
 import gui
 
-def load_annotations(annotations_file_path):
-    if os.path.isfile(annotation_file_path):
-        with open(annotation_file_path, 'rb') as f:
-            return pickle.load(f)
-    else:
-        return {}
-
 def interpolate_annotations(points):
     if len(points) == 0:
         return []
@@ -41,14 +34,10 @@ def play_video(cap):
             break
 
 class Video(object):
-    def __init__(self,video_file_path, annotations):
+    def __init__(self,video_file_path):
         self.cap = cv2.VideoCapture(video_file_path)
         if not self.cap.isOpened():
             raise Exception("Error opening video stream or file")
-        self.annotations = annotations
-        self.interpolated_annotations = {}
-        for k,v in self.annotations.items():
-            self.interpolated_annotations[k] = interpolate_annotations(v)
 
         self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
@@ -74,6 +63,22 @@ class Video(object):
         self.annotations[annotation_id][frame_index] = annotation
         self.interpolated_annotations[annotation_id] = interpolate_annotations(self.annotations[annotation_id])
 
+    def load_annotations(self, annotation_file_path):
+        # Load data
+        if os.path.isfile(annotation_file_path):
+            with open(annotation_file_path, 'rb') as f:
+                self.annotations = pickle.load(f)
+        else:
+            self.annotations = {}
+        # Process data
+        self.interpolated_annotations = {}
+        for k,v in self.annotations.items():
+            self.interpolated_annotations[k] = interpolate_annotations(v)
+    
+    def save_annotations(self, annotation_file_path):
+        with open(annotation_file_path, 'wb') as f:
+            pickle.dump(video.annotations, f)
+
     def close(self):
         self.cap.release()
 
@@ -84,10 +89,10 @@ if __name__=='__main__':
                         help='Path to the video file to be annotated.')
     parser.add_argument('--annotation_file_path', type=str, required=False,
                         default='./annotations.pkl',
-                        help='Path to the video file to be annotated.')
+                        help='Path to the file where annotations are saved.')
     parser.add_argument('--annotation_id', type=int, required=False,
                         default=None,
-                        help='Path to the video file to be annotated.')
+                        help='ID of annotation to work on.')
     args = parser.parse_args()
     print(args)
 
@@ -97,15 +102,14 @@ if __name__=='__main__':
     annotation_id = args.annotation_id
 
     # Load Video
-    video = Video(video_file_path, load_annotations(annotation_file_path))
-    print(video.annotations)
+    video = Video(video_file_path)
+    video.load_annotations(annotation_file_path)
 
     # Create GUI
-    gui.App(tkinter.Tk(), 'Video Annotator', video)
+    gui.App(tkinter.Tk(), video)
 
     # Save annotations
-    with open(annotation_file_path, 'wb') as f:
-        pickle.dump(video.annotations, f)
+    video.save_annotations(annotation_file_path)
 
     # When everything done, release the video capture object
     video.close()
