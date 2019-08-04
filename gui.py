@@ -18,9 +18,46 @@ class App:
         self.window.bind('q', self.quit)
         self.window.bind('<space>', self.toggle_pause)
         self.window.bind('<Button-1>', self.handle_click)
+        self.window.bind('n', self.jump_to_keyframe_nearest)
+        self.window.bind('<Left>', self.jump_to_keyframe_prev)
+        self.window.bind('<Right>', self.jump_to_keyframe_next)
 
         self.update()
         self.window.mainloop()
+
+    def jump_to_keyframe_nearest(self, event):
+        kf_indices = list(self.video.annotations[self.annotation_id].keys())
+        if len(kf_indices) == 0:
+            return
+        index = self.current_frame_index
+        closest_index = min(kf_indices, key=lambda x: abs(index-x))
+        self.current_frame_index = closest_index
+        print('%d -> %d' % (index, closest_index))
+        self.render_current_frame()
+
+    def jump_to_keyframe_prev(self, event):
+        index = self.current_frame_index
+        kf_indices = self.video.annotations[self.annotation_id].keys()
+        kf_indices = filter(lambda x: x<index, kf_indices)
+        kf_indices = list(kf_indices)
+        if len(kf_indices) == 0:
+            return
+        closest_index = min(kf_indices, key=lambda x: abs(index-x))
+        self.current_frame_index = closest_index
+        print('%d -> %d' % (index, closest_index))
+        self.render_current_frame()
+
+    def jump_to_keyframe_next(self, event):
+        index = self.current_frame_index
+        kf_indices = self.video.annotations[self.annotation_id].keys()
+        kf_indices = filter(lambda x: x>index, kf_indices)
+        kf_indices = list(kf_indices)
+        if len(kf_indices) == 0:
+            return
+        closest_index = min(kf_indices, key=lambda x: abs(index-x))
+        self.current_frame_index = closest_index
+        print('%d -> %d' % (index, closest_index))
+        self.render_current_frame()
 
     def handle_click(self, event):
         self.video.add_annotation(frame_index=self.current_frame_index,
