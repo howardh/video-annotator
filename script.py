@@ -19,7 +19,7 @@ def interpolate_annotations(points):
         diff = (points[end][0]-points[start][0],points[end][1]-points[start][1])
         diff_per_frame = (diff[0]/(end-start),diff[1]/(end-start))
         for i in range(end-start+1):
-            output[start+i] = (int(points[start][0]+diff_per_frame[0]*i),int(points[start][1]+diff_per_frame[1]*i))
+            output[start+i] = (points[start][0]+diff_per_frame[0]*i,points[start][1]+diff_per_frame[1]*i)
     return output
 
 def play_video(cap):
@@ -55,7 +55,9 @@ class Video(object):
         if show_annotations:
             for ann_id,interp_ann in self.interpolated_annotations.items():
                 if frame_index < len(interp_ann) and interp_ann[frame_index] is not None:
-                    cv2.circle(frame, center=interp_ann[frame_index],
+                    centre = interp_ann[frame_index]
+                    centre = (int(centre[0]*self.width), int(centre[1]*self.height))
+                    cv2.circle(frame, center=centre,
                             radius=10, color=(0,255,0), thickness=5, lineType=8, shift=0)
         return frame
 

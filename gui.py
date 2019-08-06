@@ -13,8 +13,9 @@ class App:
         self.current_frame_index = 0
         self.annotation_id = 0
 
-        self.canvas = tkinter.Canvas(window, width=self.video.width, height=self.video.height)
+        self.canvas = tkinter.Canvas(window, width=video.width, height=video.height)
         self.canvas.pack()
+        self.window.bind('<Configure>', self.handle_resize)
         self.window.bind('q', self.quit)
         self.window.bind('<space>', self.toggle_pause)
         self.window.bind('<Button-1>', self.handle_click)
@@ -25,6 +26,13 @@ class App:
 
         self.update()
         self.window.mainloop()
+
+    def handle_resize(self, event):
+        window_width = event.width
+        window_height = event.height
+        canvas_width = window_width
+        canvas_height = self.video.height*(window_width/self.video.width)
+        self.canvas.config(width=canvas_width,height=canvas_height)
 
     def delete_keyframe(self, event):
         self.video.remove_annotation(self.current_frame_index, self.annotation_id)
@@ -65,9 +73,11 @@ class App:
         self.render_current_frame()
 
     def handle_click(self, event):
+        width = event.widget.winfo_width()
+        height = event.widget.winfo_height()
         self.video.add_annotation(frame_index=self.current_frame_index,
                 annotation_id=self.annotation_id,
-                annotation=(event.x, event.y))
+                annotation=(event.x/width, event.y/height))
         self.render_current_frame()
 
     def toggle_pause(self, event):
@@ -81,6 +91,7 @@ class App:
     def render_current_frame(self):
         frame = self.video.get_frame(self.current_frame_index, True)
         frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+        frame = cv2.resize(frame, (self.canvas.winfo_width(), self.canvas.winfo_height()))
         self.photo = PIL.ImageTk.PhotoImage(image=PIL.Image.fromarray(frame))
         self.canvas.create_image(0, 0, image=self.photo, anchor=tkinter.NW)
 
@@ -90,5 +101,5 @@ class App:
         self.current_frame_index += 1 # FIXME: This skips the first frame
         self.render_current_frame()
 
-        delay = int(1000/self.video.fps)-5
+        delay = int(1000/self.video.fps)-15
         self.window.after(delay, self.update)
