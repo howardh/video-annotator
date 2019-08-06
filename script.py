@@ -108,7 +108,6 @@ if __name__=='__main__':
     video_file_path = args.video_file_path
     annotation_file_path = args.annotation_file_path
     annotation_id = args.annotation_id
-
     # Load Video
     video = Video(video_file_path)
     video.load_annotations(annotation_file_path)
@@ -118,8 +117,5 @@ if __name__=='__main__':
 
     # Save annotations
     video.save_annotations(annotation_file_path)
-
     # When everything done, release the video capture object
     video.close()
-    # Closes all the frames
-    cv2.destroyAllWindows()
