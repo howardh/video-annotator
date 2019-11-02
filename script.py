@@ -62,6 +62,8 @@ class Video(object):
         return frame
 
     def add_annotation(self, frame_index, annotation_id, annotation):
+        if annotation_id not in self.annotations:
+            self.annotations[annotation_id] = {}
         self.annotations[annotation_id][frame_index] = annotation
         self.interpolated_annotations[annotation_id] = interpolate_annotations(self.annotations[annotation_id])
 
