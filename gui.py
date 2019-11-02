@@ -128,6 +128,12 @@ class App:
         # Background
         self.seekbar.create_rectangle(0, 0, width, height, fill='white')
 
+        # Annotation markers
+        for ids,anns in self.video.annotations.items():
+            for frame,_ in anns.items():
+                pos = frame/self.video.frame_count*(width-h_padding*2)
+                self.seekbar.create_line(h_padding+pos, 0, h_padding+pos, height)
+
         # Current position marker
         pos = self.current_frame_index/self.video.frame_count*(width-h_padding*2)
         polygon = np.array([[0,0],[5,-10],[-5,-10]], dtype=np.float)
