@@ -92,7 +92,7 @@ class Video(object):
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Video Annotation')
-    parser.add_argument('--video_file_path', type=str, required=False,
+    parser.add_argument('--video_file_path', type=str, required=True,
                         default='/home/howard/Videos/Gym/2019-08-02/2019-08-02.webm',
                         help='Path to the video file to be annotated.')
     parser.add_argument('--annotation_file_path', type=str, required=False,

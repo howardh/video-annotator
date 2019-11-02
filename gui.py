@@ -2,8 +2,10 @@ import tkinter
 import cv2
 import PIL
 import PIL.Image, PIL.ImageTk
+import numpy as np
 
 class App:
+    SEEKBAR_H_PADDING=10
     def __init__(self, window, video):
         self.window = window
         self.window.title('Video Annotator')
@@ -14,15 +16,20 @@ class App:
         self.annotation_id = 0
 
         self.canvas = tkinter.Canvas(window, width=video.width, height=video.height)
+        self.seekbar = tkinter.Canvas(window, width=video.width, height=40)
         self.canvas.pack()
+        self.seekbar.pack()
+
         self.window.bind('<Configure>', self.handle_resize)
         self.window.bind('q', self.quit)
         self.window.bind('<space>', self.toggle_pause)
-        self.window.bind('<Button-1>', self.handle_click)
         self.window.bind('n', self.jump_to_keyframe_nearest)
         self.window.bind('<Left>', self.jump_to_keyframe_prev)
         self.window.bind('<Right>', self.jump_to_keyframe_next)
         self.window.bind('<Delete>', self.delete_keyframe)
+
+        self.canvas.bind('<Button-1>', self.handle_video_click)
+        self.seekbar.bind('<Button-1>', self.handle_seekbar_click)
 
         self.update()
         self.window.mainloop()
@@ -72,13 +79,31 @@ class App:
         print('%d -> %d' % (index, closest_index))
         self.render_current_frame()
 
-    def handle_click(self, event):
+    def seek(self, frame):
+        if type(frame) is int:
+            self.current_frame_index = frame
+        elif type(frame) is float:
+            self.current_frame_index = int(frame*self.video.frame_count)
+        else:
+            raise TypeError('Unsupported type: %s. Expected int or float.' % (type(frame)))
+        self.render_current_frame()
+
+    def handle_video_click(self, event):
         width = event.widget.winfo_width()
         height = event.widget.winfo_height()
         self.video.add_annotation(frame_index=self.current_frame_index,
                 annotation_id=self.annotation_id,
                 annotation=(event.x/width, event.y/height))
         self.render_current_frame()
+
+    def handle_seekbar_click(self, event):
+        h_padding = App.SEEKBAR_H_PADDING
+        width = event.widget.winfo_width()
+        height = event.widget.winfo_height()
+        seekto_percent = (event.x-h_padding)/(width-h_padding*2)
+        print('Seekbar click',width,height,event.x,event.y)
+        self.seek(seekto_percent)
+        self.render_seekbar()
 
     def toggle_pause(self, event):
         self.paused = not self.paused
@@ -95,11 +120,28 @@ class App:
         self.photo = PIL.ImageTk.PhotoImage(image=PIL.Image.fromarray(frame))
         self.canvas.create_image(0, 0, image=self.photo, anchor=tkinter.NW)
 
+    def render_seekbar(self):
+        width = self.seekbar.winfo_width()
+        height = self.seekbar.winfo_height()
+        h_padding = App.SEEKBAR_H_PADDING
+
+        # Background
+        self.seekbar.create_rectangle(0, 0, width, height, fill='white')
+
+        # Current position marker
+        pos = self.current_frame_index/self.video.frame_count*(width-h_padding*2)
+        polygon = np.array([[0,0],[5,-10],[-5,-10]], dtype=np.float)
+        polygon += [h_padding+pos,height/2]
+        polygon = polygon.flatten().tolist()
+        self.seekbar.create_polygon(polygon, fill='black')
+        self.seekbar.create_line(h_padding, height/2, width-h_padding, height/2)
+
     def update(self):
         if self.paused:
             return
         self.current_frame_index += 1 # FIXME: This skips the first frame
         self.render_current_frame()
+        self.render_seekbar()
 
         delay = int(1000/self.video.fps)-15
         self.window.after(delay, self.update)
