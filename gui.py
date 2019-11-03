@@ -8,6 +8,7 @@ import templatematcher
 
 class App:
     SEEKBAR_H_PADDING=10
+    SEEKBAR_HEIGHT=40
 
     def __init__(self, window, video):
         self.window = window
@@ -18,8 +19,10 @@ class App:
         self.current_frame_index = 0
         self.annotation_id = 0
 
-        self.canvas = tkinter.Canvas(window, width=video.width, height=video.height)
-        self.seekbar = tkinter.Canvas(window, width=video.width, height=40)
+        self.canvas = tkinter.Canvas(
+                window, width=video.width, height=video.height)
+        self.seekbar = tkinter.Canvas(
+                window, width=video.width, height=App.SEEKBAR_HEIGHT)
         self.canvas.pack()
         self.seekbar.pack()
 
@@ -150,7 +153,8 @@ class App:
         for ids,anns in self.video.annotations.items():
             for frame,_ in anns.items():
                 pos = frame/self.video.frame_count*(width-h_padding*2)
-                self.seekbar.create_line(h_padding+pos, 0, h_padding+pos, height)
+                self.seekbar.create_line(
+                        h_padding+pos, 0, h_padding+pos, height)
 
         # Current position marker
         pos = self.current_frame_index/self.video.frame_count*(width-h_padding*2)
@@ -158,7 +162,8 @@ class App:
         polygon += [h_padding+pos,height/2]
         polygon = polygon.flatten().tolist()
         self.seekbar.create_polygon(polygon, fill='black')
-        self.seekbar.create_line(h_padding, height/2, width-h_padding, height/2)
+        self.seekbar.create_line(
+                h_padding, height/2, width-h_padding, height/2)
 
     def update(self):
         if self.paused:
