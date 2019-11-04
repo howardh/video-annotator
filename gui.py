@@ -38,6 +38,7 @@ class App:
         self.window.bind('g', self.autogenerate_annotation)
 
         self.canvas.bind('<Button-1>', self.handle_video_click)
+        self.canvas.bind('<Button-3>', self.handle_video_click)
         self.seekbar.bind('<Button-1>', self.handle_seekbar_click)
 
         self.update()
@@ -111,11 +112,16 @@ class App:
         self.render_current_frame()
 
     def handle_video_click(self, event):
-        width = event.widget.winfo_width()
-        height = event.widget.winfo_height()
-        self.video.add_annotation(frame_index=self.current_frame_index,
-                annotation_id=self.annotation_id,
-                annotation=(event.x/width, event.y/height))
+        if event.num == 1:
+            width = event.widget.winfo_width()
+            height = event.widget.winfo_height()
+            self.video.add_annotation(frame_index=self.current_frame_index,
+                    annotation_id=self.annotation_id,
+                    annotation=(event.x/width, event.y/height))
+        elif event.num == 3:
+            self.video.add_annotation(frame_index=self.current_frame_index,
+                    annotation_id=self.annotation_id,
+                    annotation=None)
         self.render_current_frame()
         self.render_seekbar()
 
@@ -153,10 +159,14 @@ class App:
 
         # Annotation markers
         for ids,anns in self.video.annotations.items():
-            for frame,_ in anns.items():
+            for frame,ann in anns.items():
+                if ann is None:
+                    colour = 'red'
+                else:
+                    colour = 'black'
                 pos = frame/self.video.frame_count*(width-h_padding*2)
                 self.seekbar.create_line(
-                        h_padding+pos, 0, h_padding+pos, height)
+                        h_padding+pos, 0, h_padding+pos, height, fill=colour)
 
         # Current position marker
         pos = self.current_frame_index/self.video.frame_count*(width-h_padding*2)
