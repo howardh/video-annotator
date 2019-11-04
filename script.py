@@ -4,7 +4,9 @@ import pickle
 import os
 import argparse
 import tkinter
+from tqdm import tqdm
 
+import templatematcher
 import gui
 
 def interpolate_annotations(points):
@@ -54,12 +56,31 @@ class Video(object):
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         ret, frame = self.cap.read()
         if show_annotations:
-            for ann_id,interp_ann in self.interpolated_annotations.items():
+            for ann_id in self.annotations.keys():
+                interp_ann = self.interpolated_annotations[ann_id]
+                gen_ann = self.generated_annotations[ann_id]
                 if frame_index < len(interp_ann) and interp_ann[frame_index] is not None:
                     centre = interp_ann[frame_index]
-                    centre = (int(centre[0]*self.width), int(centre[1]*self.height))
+                    centre = (int(centre[0]*self.width),
+                              int(centre[1]*self.height))
                     cv2.circle(frame, center=centre,
-                            radius=10, color=(0,255,0), thickness=5, lineType=8, shift=0)
+                            radius=10, color=(0,255,0),
+                            thickness=5, lineType=8, shift=0)
+                if frame_index < len(gen_ann) and gen_ann[frame_index] is not None:
+                    centre = gen_ann[frame_index]
+                    centre = (int(centre[0]*self.width),
+                              int(centre[1]*self.height))
+                    cv2.circle(frame, center=centre,
+                            radius=10, color=(255,0,0),
+                            thickness=5, lineType=8, shift=0)
+                for i in range(1,frame_index):
+                    c0 = gen_ann[i-1]
+                    c1 = gen_ann[i]
+                    if c1 is None:
+                        break
+                    c0 = (int(c0[0]*self.width),int(c0[1]*self.height))
+                    c1 = (int(c1[0]*self.width),int(c1[1]*self.height))
+                    cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
         return frame
 
     def add_annotation(self, frame_index, annotation_id, annotation):
@@ -88,10 +109,25 @@ class Video(object):
         self.interpolated_annotations = {}
         for k,v in self.annotations.items():
             self.interpolated_annotations[k] = interpolate_annotations(v)
+        self.generated_annotations = {}
+        for ann_id in self.annotations.keys():
+            self.generated_annotations[ann_id] = self.generate_annotations(ann_id)
     
+    def generate_annotations(self, annotation_id):
+        annotations = [None]*self.frame_count
+        self.generated_annotations[annotation_id] = annotations
+        try:
+            for frame_index in tqdm(range(self.frame_count),desc='Generating annotations'):
+                ann = templatematcher.generate_annotation(self,frame_index,
+                        annotation_id=annotation_id)
+                annotations[frame_index] = ann[annotation_id]
+        except KeyboardInterrupt:
+            pass
+        return annotations
+
     def save_annotations(self, annotation_file_path):
         with open(annotation_file_path, 'wb') as f:
-            pickle.dump(video.annotations, f)
+            pickle.dump(self.annotations, f)
 
     def close(self):
         self.cap.release()

@@ -1,5 +1,6 @@
 import cv2
 import numpy as np
+from tqdm import tqdm
 
 import logging
 
@@ -12,17 +13,20 @@ def compute_templates(video,template_size,annotation_id):
     width = video.width
     height = video.height
     templates = []
-    for index,coord in video.annotations[annotation_id].items():
+    for index,coord in tqdm(video.annotations[annotation_id].items(),desc='Creating template'):
+        if coord is None:
+            continue
         frame = video.get_frame(index,show_annotations=False)
         x = int(width*coord[0]-template_size[0]/2)
         y = int(height*coord[1]-template_size[1]/2)
         template = frame[y:(y+template_size[1]),x:(x+template_size[0]),:]
         templates.append(template)
         cv2.imwrite('temp/template-%d.png'%index,template)
+        break
     mean_template = np.mean(templates,0).astype(np.uint8)
     return templates, mean_template
 
-def generate_annotation(video,frame_index,template_size=(64,64),annotation_id=None,method=cv2.TM_SQDIFF_NORMED):
+def generate_annotation(video,frame_index,template_size=(64,64),annotation_id=None,method=cv2.TM_SQDIFF_NORMED,window_size=(256,256)):
     """ Given a video with annotations, annotate a new frame by
     template matching
     """
@@ -41,43 +45,36 @@ def generate_annotation(video,frame_index,template_size=(64,64),annotation_id=No
         templates, mean_template = compute_templates(
                 video,template_size,annotation_id)
 
-    ## Compute Prior (New label should be near interpolated point)
-    #log.info('Computing prior')
-    #nearest_coord = video.get_annotation(frame_index,annotation_id)
-    #mu_x = int(width*nearest_coord[0]-template_size[0]/2)
-    #mu_y = int(height*nearest_coord[1]-template_size[1]/2)
-    #print(mu_x,mu_y)
-    #std = 100
-    #coef = 1/(np.sqrt(2*np.pi)*std)
-    #gauss = lambda y,x: coef*np.exp(-((x-mu_x)**2+(y-mu_y)**2)/(2*std**2))
-    #prior = np.fromfunction(
-    #        gauss,
-    #        shape=(
-    #            int(height-template_size[1]+1),
-    #            int(width-template_size[0]+1)),
-    #        dtype=np.float)
-    #prior = prior/prior.max()*0.9
-    #print(prior)
-    #print(prior.min(), prior.max())
-    #cv2.imwrite('prior.png',prior*255)
-    #print(prior*255)
+    # Get a small window to search through
+    nearest_coord = video.generated_annotations[annotation_id][frame_index-1]
+    frame = video.get_frame(frame_index,show_annotations=False)
+    if nearest_coord is not None:
+        offset_x = int(nearest_coord[0]*width-window_size[0]/2)
+        offset_y = int(nearest_coord[1]*height-window_size[1]/2)
+        offset_x = max(offset_x,0)
+        offset_x = min(offset_x,width-window_size[0])
+        offset_y = max(offset_y,0)
+        offset_y = min(offset_y,height-window_size[1])
+        window = frame[offset_y:offset_y+window_size[1],offset_x:offset_x+window_size[0],:]
+    else:
+        offset_x = 0
+        offset_y = 0
+        window = frame
 
     # Search for template in frame
     log.info('Searching frame for match')
-    frame = video.get_frame(frame_index,show_annotations=False)
-    res = cv2.matchTemplate(frame,mean_template,method)
+    #frame = video.get_frame(frame_index,show_annotations=False)
+    res = cv2.matchTemplate(window,mean_template,method)
     min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
     if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
-        #min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res*(1-prior))
         top_left = min_loc
     else:
-        #min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res*prior)
         top_left = max_loc
 
     return {
         annotation_id: (
-            (top_left[0]+template_size[0]/2)/width,
-            (top_left[1]+template_size[1]/2)/height
+            (top_left[0]+template_size[0]/2+offset_x)/width,
+            (top_left[1]+template_size[1]/2+offset_y)/height
         )
     }
 
