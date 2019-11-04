@@ -73,6 +73,9 @@ class Video(object):
         del self.annotations[annotation_id][frame_index]
         self.interpolated_annotations[annotation_id] = interpolate_annotations(self.annotations[annotation_id])
 
+    def get_annotation(self, frame_index, annotation_id):
+        return self.interpolated_annotations[annotation_id][frame_index]
+
     def load_annotations(self, annotation_file_path):
         # Load data
         if os.path.isfile(annotation_file_path):
