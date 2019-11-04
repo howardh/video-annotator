@@ -41,15 +41,16 @@ class Video(object):
 
         self.frame_count = int(self.cap.get(cv2.CAP_PROP_FRAME_COUNT))
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
-        self.width = self.cap.get(cv2.CAP_PROP_FRAME_WIDTH)
-        self.height = self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
+        self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         print('Number of frames:', self.frame_count)
         print('Frames per second:', self.fps)
         print('Frame width:', self.width)
         print('Frame height:', self.height)
 
     def get_frame(self, frame_index=None, show_annotations=False):
-        if frame_index is not None:
+        current_frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
+        if frame_index is not None and frame_index != current_frame_index:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         ret, frame = self.cap.read()
         if show_annotations:

@@ -3,6 +3,7 @@ import cv2
 import PIL
 import PIL.Image, PIL.ImageTk
 import numpy as np
+import time
 
 import templatematcher
 
@@ -18,6 +19,7 @@ class App:
         self.paused = False
         self.current_frame_index = 0
         self.annotation_id = 0
+        self.last_update = time.process_time()
 
         self.canvas = tkinter.Canvas(
                 window, width=video.width, height=video.height)
@@ -172,5 +174,9 @@ class App:
         self.render_current_frame()
         self.render_seekbar()
 
-        delay = int(1000/self.video.fps)-15
+        new_process_time = time.process_time()
+        time_diff = new_process_time-self.last_update
+        self.last_update = new_process_time
+        #delay = int(1000/self.video.fps-time_diff)
+        delay = 1
         self.window.after(delay, self.update)
