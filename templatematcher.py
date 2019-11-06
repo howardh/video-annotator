@@ -39,6 +39,10 @@ def generate_annotation(video,frame_index,template_size=(64,64),annotation_id=No
     width = video.width
     height = video.height
 
+    # Check that there should be something here
+    if len(video.interpolated_annotations[annotation_id]) >= frame_index and video.interpolated_annotations[annotation_id][frame_index-1] is None:
+        return { annotation_id: None }
+
     # Get template
     log.info('Computing mean template')
     if templates is None or mean_template is None:
@@ -46,7 +50,11 @@ def generate_annotation(video,frame_index,template_size=(64,64),annotation_id=No
                 video,template_size,annotation_id)
 
     # Get a small window to search through
-    nearest_coord = video.generated_annotations[annotation_id][frame_index-1]
+    if frame_index-1 in video.annotations[annotation_id]:
+        nearest_coord = video.annotations[annotation_id][frame_index-1]
+    else:
+        nearest_coord = video.generated_annotations[annotation_id][frame_index-1]
+
     frame = video.get_frame(frame_index,show_annotations=False)
     if nearest_coord is not None:
         offset_x = int(nearest_coord[0]*width-window_size[0]/2)

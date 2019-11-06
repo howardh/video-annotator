@@ -5,6 +5,7 @@ import os
 import argparse
 import tkinter
 from tqdm import tqdm
+from collections import defaultdict
 
 import templatematcher
 import gui
@@ -73,14 +74,15 @@ class Video(object):
                     cv2.circle(frame, center=centre,
                             radius=10, color=(255,0,0),
                             thickness=5, lineType=8, shift=0)
-                for i in range(1,frame_index):
-                    c0 = gen_ann[i-1]
-                    c1 = gen_ann[i]
-                    if c1 is None:
-                        break
-                    c0 = (int(c0[0]*self.width),int(c0[1]*self.height))
-                    c1 = (int(c1[0]*self.width),int(c1[1]*self.height))
-                    cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
+                if len(gen_ann) > 0:
+                    for i in range(1,frame_index):
+                        c0 = gen_ann[i-1]
+                        c1 = gen_ann[i]
+                        if c0 is None or c1 is None:
+                            continue
+                        c0 = (int(c0[0]*self.width),int(c0[1]*self.height))
+                        c1 = (int(c1[0]*self.width),int(c1[1]*self.height))
+                        cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
         return frame
 
     def add_annotation(self, frame_index, annotation_id, annotation):
@@ -92,6 +94,7 @@ class Video(object):
     def remove_annotation(self, frame_index, annotation_id):
         if frame_index not in self.annotations[annotation_id]:
             print('No keyframe selected')
+            return
         del self.annotations[annotation_id][frame_index]
         self.interpolated_annotations[annotation_id] = interpolate_annotations(self.annotations[annotation_id])
 
@@ -109,9 +112,7 @@ class Video(object):
         self.interpolated_annotations = {}
         for k,v in self.annotations.items():
             self.interpolated_annotations[k] = interpolate_annotations(v)
-        self.generated_annotations = {}
-        for ann_id in self.annotations.keys():
-            self.generated_annotations[ann_id] = self.generate_annotations(ann_id)
+        self.generated_annotations = defaultdict(lambda: [])
     
     def generate_annotations(self, annotation_id):
         annotations = [None]*self.frame_count
@@ -119,7 +120,8 @@ class Video(object):
         try:
             for frame_index in tqdm(range(self.frame_count),desc='Generating annotations'):
                 ann = templatematcher.generate_annotation(self,frame_index,
-                        annotation_id=annotation_id)
+                        annotation_id=annotation_id,
+                        window_size=(128,128))
                 annotations[frame_index] = ann[annotation_id]
         except KeyboardInterrupt:
             pass

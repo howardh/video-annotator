@@ -16,7 +16,7 @@ class App:
         self.window.title('Video Annotator')
         self.video = video
 
-        self.paused = False
+        self.paused = True
         self.current_frame_index = 0
         self.annotation_id = 0
         self.last_update = time.process_time()
@@ -27,15 +27,19 @@ class App:
                 window, width=video.width, height=App.SEEKBAR_HEIGHT)
         self.canvas.pack()
         self.seekbar.pack()
+        self.create_menu()
 
         self.window.bind('<Configure>', self.handle_resize)
         self.window.bind('q', self.quit)
         self.window.bind('<space>', self.toggle_pause)
         self.window.bind('n', self.jump_to_keyframe_nearest)
-        self.window.bind('<Left>', self.jump_to_keyframe_prev)
-        self.window.bind('<Right>', self.jump_to_keyframe_next)
+        self.window.bind('<Control-Left>', self.jump_to_keyframe_prev)
+        self.window.bind('<Control-Right>', self.jump_to_keyframe_next)
+        self.window.bind('<Left>', self.jump_to_prev_frame)
+        self.window.bind('<Right>', self.jump_to_next_frame)
+        self.window.bind('<Up>', self.prev_annotation)
+        self.window.bind('<Down>', self.next_annotation)
         self.window.bind('<Delete>', self.delete_keyframe)
-        self.window.bind('g', self.autogenerate_annotation)
 
         self.canvas.bind('<Button-1>', self.handle_video_click)
         self.canvas.bind('<Button-3>', self.handle_video_click)
@@ -43,6 +47,29 @@ class App:
 
         self.update()
         self.window.mainloop()
+
+    def create_menu(self):
+        menu_bar = tkinter.Menu(self.window)
+
+        file_menu = tkinter.Menu(menu_bar, tearoff=0)
+        file_menu.add_command(label="Open", command=lambda: None)
+        file_menu.add_command(label="Save", command=lambda: None)
+        file_menu.add_separator()
+        file_menu.add_command(label="Exit", command=self.quit)
+        menu_bar.add_cascade(label="File", menu=file_menu)
+
+        edit_menu = tkinter.Menu(menu_bar, tearoff=0)
+        edit_menu.add_command(label="New Annotation", command=lambda: None)
+        edit_menu.add_command(label="Delete Annotation", command=lambda: None)
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Clear Annotation",
+                command=self.clear_annotation)
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Generate Annotation Path",
+                command=self.generate_annotations)
+        menu_bar.add_cascade(label="Edit", menu=edit_menu)
+
+        self.window.config(menu=menu_bar)
 
     def handle_resize(self, event):
         window_width = event.width
@@ -77,6 +104,16 @@ class App:
         print('%d -> %d' % (index, closest_index))
         self.render_current_frame()
 
+    def jump_to_prev_frame(self, event):
+        if self.current_frame_index > 0:
+            self.current_frame_index -= 1
+            self.render_current_frame()
+
+    def jump_to_next_frame(self, event):
+        if self.current_frame_index < self.video.frame_count:
+            self.current_frame_index += 1
+            self.render_current_frame()
+
     def jump_to_keyframe_next(self, event):
         index = self.current_frame_index
         kf_indices = self.video.annotations[self.annotation_id].keys()
@@ -89,17 +126,45 @@ class App:
         print('%d -> %d' % (index, closest_index))
         self.render_current_frame()
 
-    def autogenerate_annotation(self, event):
-        ann = templatematcher.generate_annotation(
-                self.video,self.current_frame_index,
-                template_size=(128,128),
-                method=cv2.TM_CCOEFF_NORMED)
-        for k,v in ann.items():
-            self.video.add_annotation(frame_index=self.current_frame_index,
-                    annotation_id=k,
-                    annotation=v)
-            print(v)
+    def generate_annotations(self):
+        self.video.generate_annotations(self.annotation_id)
         self.render_current_frame()
+        self.render_seekbar()
+
+    def prev_annotation(self):
+        ann_ids = sorted(self.annotations.keys()).reverse()
+        for i in ann_ids:
+            if i < self.annotation_id:
+                self.annotation_id = i
+                return
+
+    def next_annotation(self):
+        ann_ids = sorted(self.annotations.keys())
+        for i in ann_ids:
+            if i > self.annotation_id:
+                self.annotation_id = i
+                return
+
+    def new_annotation(self):
+        annotation_id = max(self.annotations.keys())
+        self.annotations[annotation_id] = {}
+
+    def delete_annotation(self):
+        deleted_id = self.annotation_id
+        del self.annotations[deleted_id]
+        # Set selected annotation to the previous annotation
+        # i.e. Find largest ID that's smaller than the deleted ID
+        ann_ids = sorted(self.annotations.keys()).reverse()
+        for i in ann_ids:
+            if i < deleted_id:
+                self.annotation_id = i
+                return
+        # If all IDs are larger than the deleted ID,
+        # then we chose the smallest ID
+        self.annotation_id = ann_ids[-1]
+
+    def clear_annotation(self):
+        self.video.annotations[self.annotation_id] = {}
         self.render_seekbar()
 
     def seek(self, frame):
@@ -109,6 +174,10 @@ class App:
             self.current_frame_index = int(frame*self.video.frame_count)
         else:
             raise TypeError('Unsupported type: %s. Expected int or float.' % (type(frame)))
+        if self.current_frame_index < 0:
+            self.current_frame_index = 0
+        if self.current_frame_index > self.video.frame_count:
+            self.current_frame_index = self.video.frame_count
         self.render_current_frame()
 
     def handle_video_click(self, event):
@@ -179,7 +248,10 @@ class App:
 
     def update(self):
         if self.paused:
+            self.render_current_frame()
+            self.render_seekbar()
             return
+
         self.current_frame_index += 1 # FIXME: This skips the first frame
         self.render_current_frame()
         self.render_seekbar()
