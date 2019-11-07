@@ -21,8 +21,9 @@ class App:
         self.annotation_id = 0
         self.last_update = time.process_time()
 
-        self.canvas = tkinter.Canvas(
-                window, width=video.width, height=video.height)
+        #self.canvas = tkinter.Canvas(
+        #        window, width=video.width, height=video.height)
+        self.canvas = tkinter.Canvas(window)
         self.seekbar = tkinter.Canvas(
                 window, width=video.width, height=App.SEEKBAR_HEIGHT)
 
@@ -73,10 +74,20 @@ class App:
         self.window.config(menu=menu_bar)
 
     def handle_resize(self, event):
-        window_width = event.width
-        window_height = event.height
-        canvas_width = window_width
-        canvas_height = self.video.height*(window_width/self.video.width)
+        w_width = self.window.winfo_width()
+        w_height = self.window.winfo_height()
+        v_width = self.video.width
+        v_height = self.video.height
+        scale = min(w_width/v_width,w_height/v_height)
+
+        if w_height > 100:
+            if scale*v_height > w_height-100:
+                scale = (w_height-100)/v_height
+
+        # Compute new canvas size
+        canvas_width = scale*v_width
+        canvas_height = scale*v_height
+
         self.canvas.config(width=canvas_width,height=canvas_height)
         self.render_current_frame()
         self.render_seekbar()
@@ -217,9 +228,17 @@ class App:
     def render_current_frame(self):
         frame = self.video.get_frame(self.current_frame_index, True)
         frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
-        frame = cv2.resize(frame, (self.canvas.winfo_width(), self.canvas.winfo_height()))
+        c_width = self.canvas.winfo_width()
+        c_height = self.canvas.winfo_height()
+        v_width = self.video.width
+        v_height = self.video.height
+        scale = min(c_width/v_width,c_height/v_height)
+        dims = (int(v_width*scale),int(v_height*scale))
+        if dims[0] < 1 or dims[1] < 1:
+            return
+        frame = cv2.resize(frame, dims)
         self.photo = PIL.ImageTk.PhotoImage(image=PIL.Image.fromarray(frame))
-        self.canvas.create_image(0, 0, image=self.photo, anchor=tkinter.NW)
+        self.canvas.create_image(c_width/2, c_height/2, image=self.photo, anchor=tkinter.CENTER)
 
     def render_seekbar(self):
         width = self.seekbar.winfo_width()
