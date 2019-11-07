@@ -25,6 +25,7 @@ class App:
                 window, width=video.width, height=video.height)
         self.seekbar = tkinter.Canvas(
                 window, width=video.width, height=App.SEEKBAR_HEIGHT)
+
         self.canvas.pack()
         self.seekbar.pack()
         self.create_menu()
@@ -77,6 +78,8 @@ class App:
         canvas_width = window_width
         canvas_height = self.video.height*(window_width/self.video.width)
         self.canvas.config(width=canvas_width,height=canvas_height)
+        self.render_current_frame()
+        self.render_seekbar()
 
     def delete_keyframe(self, event):
         self.video.remove_annotation(self.current_frame_index, self.annotation_id)
