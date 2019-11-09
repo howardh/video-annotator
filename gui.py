@@ -148,21 +148,19 @@ class App:
     def prev_annotation(self):
         ann_ids = sorted(self.video.annotations.keys())
         ann_ids.reverse()
-        print(ann_ids)
         for i in ann_ids:
             if i < self.annotation_id:
                 self.annotation_id = i
-                print('Selected annotation',self.annotation_id)
+                print('Selected annotation %d/%d'%(len(ann_ids)-ann_ids.index(self.annotation_id),len(ann_ids)))
                 break
         self.render_seekbar()
 
     def next_annotation(self):
         ann_ids = sorted(self.video.annotations.keys())
-        print(ann_ids)
         for i in ann_ids:
             if i > self.annotation_id:
                 self.annotation_id = i
-                print('Selected annotation',self.annotation_id)
+                print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
                 break
         self.render_seekbar()
 
@@ -171,6 +169,9 @@ class App:
         self.video.annotations[annotation_id] = {}
         self.annotation_id = annotation_id
         self.render_seekbar()
+        # Console output
+        ann_ids = sorted(self.video.annotations.keys())
+        print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
 
     def delete_annotation(self):
         deleted_id = self.annotation_id
@@ -179,6 +180,9 @@ class App:
         # i.e. Find largest ID that's smaller than the deleted ID
         self.prev_annotation()
         self.next_annotation()
+        # Console output
+        ann_ids = sorted(self.video.annotations.keys())
+        print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
 
     def clear_annotation(self):
         self.video.annotations[self.annotation_id] = {}
