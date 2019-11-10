@@ -94,7 +94,7 @@ class App:
         self.render_seekbar()
 
     def delete_keyframe(self, event):
-        self.video.remove_annotation(self.current_frame_index, self.annotation_id)
+        self.annotations.remove_annotation(self.current_frame_index, self.annotation_id)
         self.render_current_frame()
 
     def jump_to_keyframe_nearest(self, event):
@@ -144,7 +144,8 @@ class App:
         self.render_seekbar()
 
     def generate_annotations(self):
-        self.annotations.generate_annotations(self.annotation_id,self.video)
+        self.annotations.generate_annotations(
+                self.annotation_id,self.video,self.current_frame_index)
         self.render_current_frame()
         self.render_seekbar()
 
@@ -168,8 +169,8 @@ class App:
         self.render_seekbar()
 
     def new_annotation(self):
-        annotation_id = max(self.annotations.keys())+1
-        self.annotations[annotation_id] = {}
+        annotation_id = max(self.annotations.annotations.keys())+1
+        self.annotations.annotations[annotation_id] = {}
         self.annotation_id = annotation_id
         self.render_seekbar()
         # Console output

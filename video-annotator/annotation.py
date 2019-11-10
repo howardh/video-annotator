@@ -25,9 +25,9 @@ def interpolate_annotations(points):
 class Annotations():
     def __init__(self, file_path):
         self.file_path = file_path
-        self.annotations = {}
-        self.interpolated_annotations = {}
-        self.generated_annotations = defaultdict(lambda: [])
+        self.annotations = defaultdict(lambda: SparseAnnotation())
+        self.interpolated_annotations = defaultdict(lambda: DenseAnnotation())
+        self.generated_annotations = defaultdict(lambda: DenseAnnotation())
 
         self.load_annotations(file_path)
         self.interpolate_annotations()
@@ -70,12 +70,11 @@ class Annotations():
         for k,v in self.annotations.items():
             self.interpolated_annotations[k] = interpolate_annotations(v)
     
-    def generate_annotations(self, annotation_id, video):
-        num_frames = max(self.annotations[annotation_id])
-        annotations = [None]*num_frames
-        self.generated_annotations[annotation_id] = annotations
+    def generate_annotations(self, annotation_id, video, starting_index=0):
+        num_frames = video.frame_count
+        annotations = self.generated_annotations[annotation_id]
         try:
-            for frame_index in tqdm(range(num_frames),desc='Generating annotations'):
+            for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
                 ann = templatematcher.generate_annotation(video,self,
                         frame_index,
                         annotation_id=annotation_id,
@@ -93,7 +92,6 @@ class Annotations():
         height,width,_ = frame.shape
         for ann_id in self.annotations.keys():
             interp_ann = self.interpolated_annotations[ann_id]
-            gen_ann = self.generated_annotations[ann_id]
             if frame_index < len(interp_ann) and interp_ann[frame_index] is not None:
                 centre = interp_ann[frame_index]
                 centre = (int(centre[0]*width),
@@ -101,22 +99,24 @@ class Annotations():
                 cv2.circle(frame, center=centre,
                         radius=10, color=(0,255,0),
                         thickness=5, lineType=8, shift=0)
-            if frame_index < len(gen_ann) and gen_ann[frame_index] is not None:
-                centre = gen_ann[frame_index]
-                centre = (int(centre[0]*width),
-                          int(centre[1]*height))
-                cv2.circle(frame, center=centre,
-                        radius=10, color=(255,0,0),
-                        thickness=5, lineType=8, shift=0)
-            if len(gen_ann) > 0:
-                for i in range(max(1,frame_index-num_frames),frame_index):
-                    c0 = gen_ann[i-1]
-                    c1 = gen_ann[i]
-                    if c0 is None or c1 is None:
-                        continue
-                    c0 = (int(c0[0]*width),int(c0[1]*height))
-                    c1 = (int(c1[0]*width),int(c1[1]*height))
-                    cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
+            if ann_id in self.generated_annotations:
+                gen_ann = self.generated_annotations[ann_id]
+                if frame_index < len(gen_ann) and gen_ann[frame_index] is not None:
+                    centre = gen_ann[frame_index]
+                    centre = (int(centre[0]*width),
+                              int(centre[1]*height))
+                    cv2.circle(frame, center=centre,
+                            radius=10, color=(255,0,0),
+                            thickness=5, lineType=8, shift=0)
+                if len(gen_ann) > 0:
+                    for i in range(max(1,frame_index-num_frames),frame_index):
+                        c0 = gen_ann[i-1]
+                        c1 = gen_ann[i]
+                        if c0 is None or c1 is None:
+                            continue
+                        c0 = (int(c0[0]*width),int(c0[1]*height))
+                        c1 = (int(c1[0]*width),int(c1[1]*height))
+                        cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
         return frame
 
 class Annotation():
@@ -147,6 +147,9 @@ class DenseAnnotation():
             return None
 
     def __setitem__(self,index,value):
-        if index > len(self.data):
+        if index >= len(self.data):
             self.data = self.data + [None]*(index-len(self.data)+1)
         self.data[index] = value
+
+    def __len__(self):
+        return len(self.data)
