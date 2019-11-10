@@ -25,7 +25,7 @@ if __name__=='__main__':
     annotation_id = args.annotation_id
     # Load Video
     video = Video(video_file_path)
-    annotations = Annotations(annotation_file_path)
+    annotations = Annotations(annotation_file_path, video)
 
     # Create GUI
     gui.App(tkinter.Tk(), video, annotations)

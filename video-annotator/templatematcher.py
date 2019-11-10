@@ -10,6 +10,11 @@ templates = None
 mean_template = None
 
 def compute_templates(video,annotations,template_size,annotation_id):
+    global templates, mean_template
+    if templates is not None and mean_template is not None:
+        return templates, mean_template
+
+    log.info('Computing mean template')
     width = video.width
     height = video.height
     templates = []
@@ -26,12 +31,15 @@ def compute_templates(video,annotations,template_size,annotation_id):
     mean_template = np.mean(templates,0).astype(np.uint8)
     return templates, mean_template
 
+def compute_nearest_template(video,annotations,frame_index,template_size,annotation_id):
+    # Find closest manual annotation to frame_index
+    # Extract template
+    pass
+
 def generate_annotation(video,annotations,frame_index,template_size=(64,64),annotation_id=None,method=cv2.TM_SQDIFF_NORMED,window_size=(256,256)):
     """ Given a video with annotations, annotate a new frame by
     template matching
     """
-
-    global templates, mean_template
 
     if annotation_id is None:
         annotation_id = list(annotations.annotations.keys())[0]
@@ -44,10 +52,8 @@ def generate_annotation(video,annotations,frame_index,template_size=(64,64),anno
         return { annotation_id: None }
 
     # Get template
-    log.info('Computing mean template')
-    if templates is None or mean_template is None:
-        templates, mean_template = compute_templates(
-                video,annotations,template_size,annotation_id)
+    templates, mean_template = compute_templates(
+            video,annotations,template_size,annotation_id)
 
     # Get a small window to search through
     if frame_index-1 in annotations.annotations[annotation_id]:

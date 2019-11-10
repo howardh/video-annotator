@@ -23,8 +23,9 @@ def interpolate_annotations(points):
     return output
 
 class Annotations():
-    def __init__(self, file_path):
+    def __init__(self, file_path, video):
         self.file_path = file_path
+        self.video = video
         self.annotations = defaultdict(lambda: SparseAnnotation())
         self.interpolated_annotations = defaultdict(lambda: DenseAnnotation())
         self.generated_annotations = defaultdict(lambda: DenseAnnotation())
@@ -70,8 +71,8 @@ class Annotations():
         for k,v in self.annotations.items():
             self.interpolated_annotations[k] = interpolate_annotations(v)
     
-    def generate_annotations(self, annotation_id, video, starting_index=0):
-        num_frames = video.frame_count
+    def generate_annotations(self, annotation_id, starting_index=0):
+        num_frames = self.video.frame_count
         annotations = self.generated_annotations[annotation_id]
         try:
             for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
@@ -91,9 +92,9 @@ class Annotations():
     def render(self, frame, frame_index, num_frames=100):
         height,width,_ = frame.shape
         for ann_id in self.annotations.keys():
-            interp_ann = self.interpolated_annotations[ann_id]
-            if frame_index < len(interp_ann) and interp_ann[frame_index] is not None:
-                centre = interp_ann[frame_index]
+            manu_ann = self.annotations[ann_id]
+            if frame_index in manu_ann and manu_ann[frame_index] is not None:
+                centre = manu_ann[frame_index]
                 centre = (int(centre[0]*width),
                           int(centre[1]*height))
                 cv2.circle(frame, center=centre,
