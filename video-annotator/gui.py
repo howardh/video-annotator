@@ -142,7 +142,7 @@ class App:
         self.render_current_frame()
 
     def generate_annotations(self):
-        self.video.generate_annotations(self.annotation_id)
+        self.annotations.generate_annotations(self.annotation_id,self.video)
         self.render_current_frame()
         self.render_seekbar()
 

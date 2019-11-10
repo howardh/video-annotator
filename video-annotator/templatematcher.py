@@ -9,14 +9,14 @@ log = logging.getLogger(__name__)
 templates = None
 mean_template = None
 
-def compute_templates(video,template_size,annotation_id):
+def compute_templates(video,annotations,template_size,annotation_id):
     width = video.width
     height = video.height
     templates = []
-    for index,coord in tqdm(video.annotations[annotation_id].items(),desc='Creating template'):
+    for index,coord in tqdm(annotations.annotations[annotation_id].items(),desc='Creating template'):
         if coord is None:
             continue
-        frame = video.get_frame(index,show_annotations=False)
+        frame = video.get_frame(index)
         x = int(width*coord[0]-template_size[0]/2)
         y = int(height*coord[1]-template_size[1]/2)
         template = frame[y:(y+template_size[1]),x:(x+template_size[0]),:]
@@ -26,7 +26,7 @@ def compute_templates(video,template_size,annotation_id):
     mean_template = np.mean(templates,0).astype(np.uint8)
     return templates, mean_template
 
-def generate_annotation(video,frame_index,template_size=(64,64),annotation_id=None,method=cv2.TM_SQDIFF_NORMED,window_size=(256,256)):
+def generate_annotation(video,annotations,frame_index,template_size=(64,64),annotation_id=None,method=cv2.TM_SQDIFF_NORMED,window_size=(256,256)):
     """ Given a video with annotations, annotate a new frame by
     template matching
     """
@@ -34,28 +34,28 @@ def generate_annotation(video,frame_index,template_size=(64,64),annotation_id=No
     global templates, mean_template
 
     if annotation_id is None:
-        annotation_id = list(video.annotations.keys())[0]
+        annotation_id = list(annotations.annotations.keys())[0]
 
     width = video.width
     height = video.height
 
     # Check that there should be something here
-    if len(video.interpolated_annotations[annotation_id]) >= frame_index and video.interpolated_annotations[annotation_id][frame_index-1] is None:
+    if len(annotations.interpolated_annotations[annotation_id]) >= frame_index and annotations.interpolated_annotations[annotation_id][frame_index-1] is None:
         return { annotation_id: None }
 
     # Get template
     log.info('Computing mean template')
     if templates is None or mean_template is None:
         templates, mean_template = compute_templates(
-                video,template_size,annotation_id)
+                video,annotations,template_size,annotation_id)
 
     # Get a small window to search through
-    if frame_index-1 in video.annotations[annotation_id]:
-        nearest_coord = video.annotations[annotation_id][frame_index-1]
+    if frame_index-1 in annotations.annotations[annotation_id]:
+        nearest_coord = annotations.annotations[annotation_id][frame_index-1]
     else:
-        nearest_coord = video.generated_annotations[annotation_id][frame_index-1]
+        nearest_coord = annotations.generated_annotations[annotation_id][frame_index-1]
 
-    frame = video.get_frame(frame_index,show_annotations=False)
+    frame = video.get_frame(frame_index)
     if nearest_coord is not None:
         offset_x = int(nearest_coord[0]*width-window_size[0]/2)
         offset_y = int(nearest_coord[1]*height-window_size[1]/2)
