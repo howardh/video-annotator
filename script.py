@@ -51,39 +51,33 @@ class Video(object):
         print('Frame width:', self.width)
         print('Frame height:', self.height)
 
-    def get_frame(self, frame_index=None, show_annotations=False):
+    def get_frame(self, frame_index=None):
         current_frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
         if frame_index is not None and frame_index != current_frame_index:
             self.cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index)
         ret, frame = self.cap.read()
-        if show_annotations:
-            for ann_id in self.annotations.keys():
-                interp_ann = self.interpolated_annotations[ann_id]
-                gen_ann = self.generated_annotations[ann_id]
-                if frame_index < len(interp_ann) and interp_ann[frame_index] is not None:
-                    centre = interp_ann[frame_index]
-                    centre = (int(centre[0]*self.width),
-                              int(centre[1]*self.height))
-                    cv2.circle(frame, center=centre,
-                            radius=10, color=(0,255,0),
-                            thickness=5, lineType=8, shift=0)
-                if frame_index < len(gen_ann) and gen_ann[frame_index] is not None:
-                    centre = gen_ann[frame_index]
-                    centre = (int(centre[0]*self.width),
-                              int(centre[1]*self.height))
-                    cv2.circle(frame, center=centre,
-                            radius=10, color=(255,0,0),
-                            thickness=5, lineType=8, shift=0)
-                if len(gen_ann) > 0:
-                    for i in range(1,frame_index):
-                        c0 = gen_ann[i-1]
-                        c1 = gen_ann[i]
-                        if c0 is None or c1 is None:
-                            continue
-                        c0 = (int(c0[0]*self.width),int(c0[1]*self.height))
-                        c1 = (int(c1[0]*self.width),int(c1[1]*self.height))
-                        cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
         return frame
+
+    def close(self):
+        self.cap.release()
+
+class Annotations():
+    def __init__(self, file_path):
+        self.file_path = file_path
+        self.annotations = {}
+
+        self.load_annotations(file_path)
+
+    def __getitem__(self, annotation_id):
+        if annotation_id not in self.annotations:
+            self.annotations[annotation_id] = {}
+        return self.annotations[annotation_id]
+
+    def __delitem__(self, annotation_id):
+        del self.annotations[annotation_id]
+
+    def get_ids(self):
+        return self.annotations.keys()
 
     def add_annotation(self, frame_index, annotation_id, annotation):
         if annotation_id not in self.annotations:
@@ -131,8 +125,63 @@ class Video(object):
         with open(annotation_file_path, 'wb') as f:
             pickle.dump(self.annotations, f)
 
-    def close(self):
-        self.cap.release()
+    def render(self, frame, frame_index):
+        height,width,_ = frame.shape
+        for ann_id in self.annotations.keys():
+            interp_ann = self.interpolated_annotations[ann_id]
+            gen_ann = self.generated_annotations[ann_id]
+            if frame_index < len(interp_ann) and interp_ann[frame_index] is not None:
+                centre = interp_ann[frame_index]
+                centre = (int(centre[0]*width),
+                          int(centre[1]*height))
+                cv2.circle(frame, center=centre,
+                        radius=10, color=(0,255,0),
+                        thickness=5, lineType=8, shift=0)
+            if frame_index < len(gen_ann) and gen_ann[frame_index] is not None:
+                centre = gen_ann[frame_index]
+                centre = (int(centre[0]*width),
+                          int(centre[1]*height))
+                cv2.circle(frame, center=centre,
+                        radius=10, color=(255,0,0),
+                        thickness=5, lineType=8, shift=0)
+            if len(gen_ann) > 0:
+                for i in range(1,frame_index):
+                    c0 = gen_ann[i-1]
+                    c1 = gen_ann[i]
+                    if c0 is None or c1 is None:
+                        continue
+                    c0 = (int(c0[0]*width),int(c0[1]*height))
+                    c1 = (int(c1[0]*width),int(c1[1]*height))
+                    cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
+        return frame
+
+class SparseAnnotation():
+    def __init__(self):
+        self.data = {}
+
+    def __getitem__(self,index):
+        if index in self.data:
+            return self.data[index]
+        else:
+            return None
+
+    def __setitem__(self,index,value):
+        self.data[index] = value
+
+class DenseAnnotation():
+    def __init__(self):
+        self.data = []
+
+    def __getitem__(self,index):
+        if index < len(self.data):
+            return self.data[index]
+        else:
+            return None
+
+    def __setitem__(self,index,value):
+        if index > len(self.data):
+            self.data = self.data + [None]*(index-len(self.data)+1)
+        self.data[index] = value
 
 if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Video Annotation')
@@ -154,10 +203,10 @@ if __name__=='__main__':
     annotation_id = args.annotation_id
     # Load Video
     video = Video(video_file_path)
-    video.load_annotations(annotation_file_path)
+    annotations = Annotations(annotation_file_path)
 
     # Create GUI
-    gui.App(tkinter.Tk(), video)
+    gui.App(tkinter.Tk(), video, annotations)
 
     # Save annotations
     video.save_annotations(annotation_file_path)

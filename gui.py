@@ -11,10 +11,11 @@ class App:
     SEEKBAR_H_PADDING=10
     SEEKBAR_HEIGHT=40
 
-    def __init__(self, window, video):
+    def __init__(self, window, video, annotations):
         self.window = window
         self.window.title('Video Annotator')
         self.video = video
+        self.annotations = annotations
 
         self.paused = True
         self.current_frame_index = 0
@@ -97,7 +98,7 @@ class App:
         self.render_current_frame()
 
     def jump_to_keyframe_nearest(self, event):
-        kf_indices = list(self.video.annotations[self.annotation_id].keys())
+        kf_indices = list(self.annotations[self.annotation_id].keys())
         if len(kf_indices) == 0:
             return
         index = self.current_frame_index
@@ -108,7 +109,7 @@ class App:
 
     def jump_to_keyframe_prev(self, event):
         index = self.current_frame_index
-        kf_indices = self.video.annotations[self.annotation_id].keys()
+        kf_indices = self.annotations[self.annotation_id].keys()
         kf_indices = filter(lambda x: x<index, kf_indices)
         kf_indices = list(kf_indices)
         if len(kf_indices) == 0:
@@ -130,7 +131,7 @@ class App:
 
     def jump_to_keyframe_next(self, event):
         index = self.current_frame_index
-        kf_indices = self.video.annotations[self.annotation_id].keys()
+        kf_indices = self.annotations[self.annotation_id].keys()
         kf_indices = filter(lambda x: x>index, kf_indices)
         kf_indices = list(kf_indices)
         if len(kf_indices) == 0:
@@ -146,7 +147,7 @@ class App:
         self.render_seekbar()
 
     def prev_annotation(self):
-        ann_ids = sorted(self.video.annotations.keys())
+        ann_ids = sorted(self.annotations.keys())
         ann_ids.reverse()
         for i in ann_ids:
             if i < self.annotation_id:
@@ -156,7 +157,7 @@ class App:
         self.render_seekbar()
 
     def next_annotation(self):
-        ann_ids = sorted(self.video.annotations.keys())
+        ann_ids = sorted(self.annotations.keys())
         for i in ann_ids:
             if i > self.annotation_id:
                 self.annotation_id = i
@@ -165,27 +166,27 @@ class App:
         self.render_seekbar()
 
     def new_annotation(self):
-        annotation_id = max(self.video.annotations.keys())+1
-        self.video.annotations[annotation_id] = {}
+        annotation_id = max(self.annotations.keys())+1
+        self.annotations[annotation_id] = {}
         self.annotation_id = annotation_id
         self.render_seekbar()
         # Console output
-        ann_ids = sorted(self.video.annotations.keys())
+        ann_ids = sorted(self.annotations.get_ids())
         print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
 
     def delete_annotation(self):
         deleted_id = self.annotation_id
-        del self.video.annotations[deleted_id]
+        del self.annotations[deleted_id]
         # Set selected annotation to the previous annotation
         # i.e. Find largest ID that's smaller than the deleted ID
         self.prev_annotation()
         self.next_annotation()
         # Console output
-        ann_ids = sorted(self.video.annotations.keys())
+        ann_ids = sorted(self.annotations.get_ids())
         print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
 
     def clear_annotation(self):
-        self.video.annotations[self.annotation_id] = {}
+        self.annotations[self.annotation_id] = {}
         self.render_seekbar()
 
     def seek(self, frame):
@@ -233,8 +234,9 @@ class App:
         self.window.destroy()
 
     def render_current_frame(self):
-        frame = self.video.get_frame(self.current_frame_index, True)
+        frame = self.video.get_frame(self.current_frame_index)
         frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
+        frame = self.annotations.render(frame, self.current_frame_index)
         c_width = self.canvas.winfo_width()
         c_height = self.canvas.winfo_height()
         v_width = self.video.width
@@ -265,11 +267,11 @@ class App:
                 pos = frame/self.video.frame_count*(width-h_padding*2)
                 self.seekbar.create_line(
                         h_padding+pos, 0, h_padding+pos, height, fill=colour)
-        for ann_id,anns in self.video.annotations.items():
+        for ann_id,anns in self.annotations.annotations.items():
             if ann_id == self.annotation_id:
                 continue
             draw_annotations('#cccccc','#ffcccc',anns)
-        draw_annotations('black','red',self.video.annotations[self.annotation_id])
+        draw_annotations('black','red',self.annotations[self.annotation_id])
 
         # Current position marker
         pos = self.current_frame_index/self.video.frame_count*(width-h_padding*2)
