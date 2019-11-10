@@ -7,31 +7,14 @@ from collections import defaultdict
 
 import templatematcher
 
-def interpolate_annotations(points):
-    if len(points) == 0:
-        return []
-    keyframes = sorted(points.keys())
-    num_frames = keyframes[-1]+1
-    output = [None]*num_frames
-    for start,end in zip(keyframes,keyframes[1:]):
-        if points[start] is None or points[end] is None:
-            continue
-        diff = (points[end][0]-points[start][0],points[end][1]-points[start][1])
-        diff_per_frame = (diff[0]/(end-start),diff[1]/(end-start))
-        for i in range(end-start+1):
-            output[start+i] = (points[start][0]+diff_per_frame[0]*i,points[start][1]+diff_per_frame[1]*i)
-    return output
-
 class Annotations():
     def __init__(self, file_path, video):
         self.file_path = file_path
         self.video = video
         self.annotations = defaultdict(lambda: SparseAnnotation())
-        self.interpolated_annotations = defaultdict(lambda: DenseAnnotation())
         self.generated_annotations = defaultdict(lambda: DenseAnnotation())
 
         self.load_annotations(file_path)
-        self.interpolate_annotations()
 
     def __getitem__(self, annotation_id):
         if annotation_id not in self.annotations:
@@ -48,17 +31,12 @@ class Annotations():
         if annotation_id not in self.annotations:
             self.annotations[annotation_id] = {}
         self.annotations[annotation_id][frame_index] = annotation
-        self.interpolated_annotations[annotation_id] = interpolate_annotations(self.annotations[annotation_id])
 
     def remove_annotation(self, frame_index, annotation_id):
         if frame_index not in self.annotations[annotation_id]:
             print('No keyframe selected')
             return
         del self.annotations[annotation_id][frame_index]
-        self.interpolated_annotations[annotation_id] = interpolate_annotations(self.annotations[annotation_id])
-
-    def get_annotation(self, frame_index, annotation_id):
-        return self.interpolated_annotations[annotation_id][frame_index]
 
     def load_annotations(self, annotation_file_path):
         if os.path.isfile(annotation_file_path):
@@ -67,10 +45,6 @@ class Annotations():
         else:
             self.annotations = {}
 
-    def interpolate_annotations(self):
-        for k,v in self.annotations.items():
-            self.interpolated_annotations[k] = interpolate_annotations(v)
-    
     def generate_annotations(self, annotation_id, starting_index=0):
         num_frames = self.video.frame_count
         annotations = self.generated_annotations[annotation_id]
