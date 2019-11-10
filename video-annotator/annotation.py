@@ -89,7 +89,7 @@ class Annotations():
         with open(annotation_file_path, 'wb') as f:
             pickle.dump(self.annotations, f)
 
-    def render(self, frame, frame_index):
+    def render(self, frame, frame_index, num_frames=100):
         height,width,_ = frame.shape
         for ann_id in self.annotations.keys():
             interp_ann = self.interpolated_annotations[ann_id]
@@ -109,7 +109,7 @@ class Annotations():
                         radius=10, color=(255,0,0),
                         thickness=5, lineType=8, shift=0)
             if len(gen_ann) > 0:
-                for i in range(1,frame_index):
+                for i in range(max(1,frame_index-num_frames),frame_index):
                     c0 = gen_ann[i-1]
                     c1 = gen_ann[i]
                     if c0 is None or c1 is None:

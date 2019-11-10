@@ -118,6 +118,7 @@ class App:
         self.current_frame_index = closest_index
         print('%d -> %d' % (index, closest_index))
         self.render_current_frame()
+        self.render_seekbar()
 
     def jump_to_prev_frame(self, event):
         if self.current_frame_index > 0:
@@ -140,6 +141,7 @@ class App:
         self.current_frame_index = closest_index
         print('%d -> %d' % (index, closest_index))
         self.render_current_frame()
+        self.render_seekbar()
 
     def generate_annotations(self):
         self.annotations.generate_annotations(self.annotation_id,self.video)
@@ -147,7 +149,7 @@ class App:
         self.render_seekbar()
 
     def prev_annotation(self):
-        ann_ids = sorted(self.annotations.keys())
+        ann_ids = sorted(self.annotations.annotations.keys())
         ann_ids.reverse()
         for i in ann_ids:
             if i < self.annotation_id:
@@ -157,7 +159,7 @@ class App:
         self.render_seekbar()
 
     def next_annotation(self):
-        ann_ids = sorted(self.annotations.keys())
+        ann_ids = sorted(self.annotations.annotations.keys())
         for i in ann_ids:
             if i > self.annotation_id:
                 self.annotation_id = i
@@ -206,11 +208,13 @@ class App:
         if event.num == 1:
             width = event.widget.winfo_width()
             height = event.widget.winfo_height()
-            self.video.add_annotation(frame_index=self.current_frame_index,
+            self.annotations.add_annotation(
+                    frame_index=self.current_frame_index,
                     annotation_id=self.annotation_id,
                     annotation=(event.x/width, event.y/height))
         elif event.num == 3:
-            self.video.add_annotation(frame_index=self.current_frame_index,
+            self.annotations.add_annotation(
+                    frame_index=self.current_frame_index,
                     annotation_id=self.annotation_id,
                     annotation=None)
         self.render_current_frame()
