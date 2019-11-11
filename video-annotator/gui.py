@@ -33,7 +33,8 @@ class App:
         self.create_menu()
 
         self.window.bind('<Configure>', self.handle_resize)
-        self.window.bind('q', self.quit)
+        self.window.bind('<Control-s>', lambda e: self.save())
+        self.window.bind('q', lambda e: self.quit())
         self.window.bind('<space>', self.toggle_pause)
         self.window.bind('n', self.jump_to_keyframe_nearest)
         self.window.bind('<Control-Left>', self.jump_to_keyframe_prev)
@@ -57,7 +58,7 @@ class App:
 
         file_menu = tkinter.Menu(menu_bar, tearoff=0)
         file_menu.add_command(label="Open", command=lambda: None)
-        file_menu.add_command(label="Save", command=lambda: None)
+        file_menu.add_command(label="Save", command=self.save)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
         menu_bar.add_cascade(label="File", menu=file_menu)
@@ -93,6 +94,9 @@ class App:
         self.canvas.config(width=canvas_width,height=canvas_height)
         self.render_current_frame()
         self.render_seekbar()
+
+    def save(self):
+        self.annotations.save_annotations()
 
     def delete_keyframe(self, event):
         self.annotations.remove_annotation(self.current_frame_index, self.annotation_id)
@@ -237,7 +241,7 @@ class App:
         if not self.paused:
             self.update()
 
-    def quit(self, event):
+    def quit(self):
         self.window.destroy()
 
     def render_current_frame(self):

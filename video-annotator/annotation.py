@@ -44,12 +44,15 @@ class Annotations():
         else:
             self.annotations = {}
 
-    def save_annotations(self, annotation_file_path):
+    def save_annotations(self, annotation_file_path=None):
+        if annotation_file_path is None:
+            annotation_file_path = self.file_path
         output = {}
         for ann_id,ann in self.annotations.items():
             output[ann_id] = ann.manual.data
         with open(annotation_file_path, 'wb') as f:
             pickle.dump(output, f)
+        print('saving to', annotation_file_path)
 
     def render(self, frame, frame_index, num_frames=100):
         height,width,_ = frame.shape
