@@ -17,10 +17,8 @@ class Templates:
         low,high = self.annotations.nearest_indices(index)
         if self.annotations[low] is None or self.annotations[high] is None:
             return None
-        if index-low < high-index:
-            nearest_index = low
-        else:
-            nearest_index = high
+        # Use the previous annotation, so adding a new manual annotation only affects future labels.
+        nearest_index = low
         # Compute template if needed
         if nearest_index not in self.templates:
             width = self.video.width

@@ -48,9 +48,9 @@ class App:
         self.canvas.bind('<Button-1>', self.handle_video_click)
         self.canvas.bind('<Button-3>', self.handle_video_click)
         self.seekbar.bind('<Button-1>', self.handle_seekbar_click)
+        self.window.bind('g', lambda e: self.generate_annotations())
 
         self.update()
-        self.generate_annotations()
         self.window.mainloop()
 
     def create_menu(self):

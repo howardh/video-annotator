@@ -112,6 +112,8 @@ class SparseAnnotation():
         del self.data[index]
     def __setitem__(self,index,value):
         self.data[index] = value
+    def __len__(self):
+        return len(self.data)
     def items(self):
         return self.data.items()
     def has_key(self, k):
@@ -139,7 +141,6 @@ class SparseAnnotation():
 class DenseAnnotation():
     def __init__(self):
         self.data = []
-
     def __getitem__(self,index):
         if type(index) is slice:
             start,stop,step = index.start,index.stop,index.step
@@ -165,12 +166,10 @@ class DenseAnnotation():
                 return self.data[index]
             else:
                 return None
-
     def __setitem__(self,index,value):
         if index >= len(self.data):
             self.data = self.data + [None]*(index-len(self.data)+1)
         self.data[index] = value
-
     def __len__(self):
         return len(self.data)
 
@@ -181,6 +180,10 @@ class TemplateMatchedAnnotations(DenseAnnotation):
         self.annotations = manual_annotations
         self.templates = Templates(video,manual_annotations,size=(64,64))
     def generate(self,starting_index):
+        # Check if there's enough data
+        if len(self.annotations) == 0:
+            return
+        # Generate annotation for each frame
         num_frames = self.video.frame_count
         try:
             for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
