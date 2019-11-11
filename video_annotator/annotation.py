@@ -6,7 +6,8 @@ from tqdm import tqdm
 from collections import defaultdict
 import logging
 
-from templatematcher import Templates
+import video_annotator
+from video_annotator.templatematcher import Templates
 
 log = logging.getLogger(__name__)
 

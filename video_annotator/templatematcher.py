@@ -4,8 +4,6 @@ from tqdm import tqdm
 
 import logging
 
-import annotation
-
 log = logging.getLogger(__name__)
 
 class Templates:
