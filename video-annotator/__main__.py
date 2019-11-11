@@ -30,7 +30,5 @@ if __name__=='__main__':
     # Create GUI
     gui.App(tkinter.Tk(), video, annotations)
 
-    # Save annotations
-    annotations.save_annotations(annotation_file_path)
     # When everything done, release the video capture object
     video.close()

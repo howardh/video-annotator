@@ -81,15 +81,6 @@ class Annotations():
                 c0 = (int(c0[0]*width),int(c0[1]*height))
                 c1 = (int(c1[0]*width),int(c1[1]*height))
                 cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
-            #if len(gen_ann) > 0:
-            #    for i in range(max(1,frame_index-num_frames),frame_index):
-            #        c0 = gen_ann[i-1]
-            #        c1 = gen_ann[i]
-            #        if c0 is None or c1 is None:
-            #            continue
-            #        c0 = (int(c0[0]*width),int(c0[1]*height))
-            #        c1 = (int(c1[0]*width),int(c1[1]*height))
-            #        cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
         return frame
 
 class Annotation():
@@ -160,7 +151,7 @@ class DenseAnnotation():
             if stop is None:
                 stop = len(self.data)
 
-            if start >= 0 and stop < len(self.data):
+            if start >= 0 and stop <= len(self.data):
                 return self.data[start:stop]
             if start >= len(self.data) or stop <= 0:
                 return [None]*(stop-start)
