@@ -49,6 +49,7 @@ class App:
         self.seekbar.bind('<Button-1>', self.handle_seekbar_click)
 
         self.update()
+        self.generate_annotations()
         self.window.mainloop()
 
     def create_menu(self):
@@ -96,6 +97,7 @@ class App:
     def delete_keyframe(self, event):
         self.annotations.remove_annotation(self.current_frame_index, self.annotation_id)
         self.render_current_frame()
+        self.render_seekbar()
 
     def jump_to_keyframe_nearest(self, event):
         kf_indices = list(self.annotations[self.annotation_id].keys())
@@ -109,7 +111,7 @@ class App:
 
     def jump_to_keyframe_prev(self, event):
         index = self.current_frame_index
-        kf_indices = self.annotations[self.annotation_id].keys()
+        kf_indices = self.annotations[self.annotation_id].manual.keys()
         kf_indices = filter(lambda x: x<index, kf_indices)
         kf_indices = list(kf_indices)
         if len(kf_indices) == 0:
@@ -132,7 +134,7 @@ class App:
 
     def jump_to_keyframe_next(self, event):
         index = self.current_frame_index
-        kf_indices = self.annotations[self.annotation_id].keys()
+        kf_indices = self.annotations[self.annotation_id].manual.keys()
         kf_indices = filter(lambda x: x>index, kf_indices)
         kf_indices = list(kf_indices)
         if len(kf_indices) == 0:
@@ -144,8 +146,8 @@ class App:
         self.render_seekbar()
 
     def generate_annotations(self):
-        self.annotations.generate_annotations(
-                self.annotation_id,self.current_frame_index)
+        self.annotations[self.annotation_id].template_matched.generate(
+                self.current_frame_index)
         self.render_current_frame()
         self.render_seekbar()
 
@@ -275,8 +277,8 @@ class App:
         for ann_id,anns in self.annotations.annotations.items():
             if ann_id == self.annotation_id:
                 continue
-            draw_annotations('#cccccc','#ffcccc',anns)
-        draw_annotations('black','red',self.annotations[self.annotation_id])
+            draw_annotations('#cccccc','#ffcccc',anns.manual)
+        draw_annotations('black','red',self.annotations[self.annotation_id].manual)
 
         # Current position marker
         pos = self.current_frame_index/self.video.frame_count*(width-h_padding*2)
