@@ -198,6 +198,10 @@ class TemplateMatchedAnnotations(DenseAnnotation):
         width = self.video.width
         height = self.video.height
 
+        # Check if there's a manual annotation for this frame
+        if self.annotations[frame_index] is not None:
+            return self.annotations[frame_index]
+
         # Get nearest template
         template = self.templates[frame_index]
         if template is None:

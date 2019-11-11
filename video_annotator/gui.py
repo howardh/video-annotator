@@ -259,11 +259,9 @@ class App:
         if dims[0] < 1 or dims[1] < 1:
             return
         frame = cv2.resize(frame, dims)
+        self.canvas.delete('all')
         self.photo = PIL.ImageTk.PhotoImage(image=PIL.Image.fromarray(frame))
-        if self.image_id is None:
-            self.image_id = self.canvas.create_image(c_width/2, c_height/2, image=self.photo, anchor=tkinter.CENTER)
-        else:
-            self.canvas.itemconfig(self.image_id, image=self.photo)
+        self.image_id = self.canvas.create_image(c_width/2, c_height/2, image=self.photo, anchor=tkinter.CENTER)
 
     def render_seekbar(self):
         width = self.seekbar.winfo_width()
