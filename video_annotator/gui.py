@@ -28,6 +28,8 @@ class App:
         self.seekbar = tkinter.Canvas(
                 window, width=video.width, height=App.SEEKBAR_HEIGHT)
 
+        self.image_id = None
+
         self.canvas.pack()
         self.seekbar.pack()
         self.create_menu()
@@ -258,12 +260,17 @@ class App:
             return
         frame = cv2.resize(frame, dims)
         self.photo = PIL.ImageTk.PhotoImage(image=PIL.Image.fromarray(frame))
-        self.canvas.create_image(c_width/2, c_height/2, image=self.photo, anchor=tkinter.CENTER)
+        if self.image_id is None:
+            self.image_id = self.canvas.create_image(c_width/2, c_height/2, image=self.photo, anchor=tkinter.CENTER)
+        else:
+            self.canvas.itemconfig(self.image_id, image=self.photo)
 
     def render_seekbar(self):
         width = self.seekbar.winfo_width()
         height = self.seekbar.winfo_height()
         h_padding = App.SEEKBAR_H_PADDING
+
+        self.seekbar.delete('all')
 
         # Background
         self.seekbar.create_rectangle(0, 0, width, height, fill='white')
