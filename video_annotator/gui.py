@@ -177,8 +177,8 @@ class App:
         self.render_seekbar()
 
     def new_annotation(self):
-        annotation_id = max(self.annotations.annotations.keys())+1
-        self.annotations.annotations[annotation_id] = {}
+        annotation_id = max(self.annotations.get_ids())+1
+        self.annotations[annotation_id] # Access it to create it
         self.annotation_id = annotation_id
         self.render_seekbar()
         # Console output
