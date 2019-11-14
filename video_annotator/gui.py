@@ -303,8 +303,11 @@ class App:
             self.render_current_frame()
             self.render_seekbar()
             return
+        if self.current_frame_index >= self.video.frame_count-1:
+            self.paused = True
+            return
 
-        self.current_frame_index += 1 # FIXME: This skips the first frame
+        self.current_frame_index += 1
         self.render_current_frame()
         self.render_seekbar()
 
