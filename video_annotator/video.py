@@ -15,6 +15,9 @@ class Video(object):
         print('Frame width:', self.width)
         print('Frame height:', self.height)
 
+    def __getitem__(self,index):
+        return self.get_frame(index)
+
     def get_frame(self, frame_index=None):
         current_frame_index = self.cap.get(cv2.CAP_PROP_POS_FRAMES)
         if frame_index is not None and frame_index != current_frame_index:

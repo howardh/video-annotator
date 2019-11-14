@@ -12,7 +12,7 @@ from video_annotator.templatematcher import Templates
 log = logging.getLogger(__name__)
 
 class Annotations():
-    def __init__(self, file_path, video):
+    def __init__(self, file_path, video=None):
         self.file_path = file_path
         self.video = video
         self.annotations = {}
@@ -180,6 +180,9 @@ class TemplateMatchedAnnotations(DenseAnnotation):
         self.annotations = manual_annotations
         self.templates = Templates(video,manual_annotations,size=(64,64))
     def generate(self,starting_index):
+        # Validate data
+        if self.video is None:
+            raise Exception('Video must be provided to generate annotations.')
         # Check if there's enough data
         if len(self.annotations) == 0:
             return
