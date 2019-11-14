@@ -27,6 +27,17 @@ class Annotations():
     def __delitem__(self, annotation_id):
         del self.annotations[annotation_id]
 
+    def slice(self,frame_index):
+        output = {
+                'manual': {},
+                'template_matched': {}
+        }
+        for ann_id in self.get_ids():
+            ann = self.annotations[ann_id]
+            output['manual'][ann_id] = ann.manual[frame_index]
+            output['template_matched'][ann_id] = ann.template_matched[frame_index]
+        return output
+
     def get_ids(self):
         return self.annotations.keys()
 
