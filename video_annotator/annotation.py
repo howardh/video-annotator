@@ -238,7 +238,7 @@ class TemplateMatchedAnnotations(DenseAnnotation):
         else:
             top_left = max_loc
 
-        template_size = self.templates.size
+        template_size = template.shape[:2]
         return (
             (top_left[0]+template_size[0]/2+offset_x)/width,
             (top_left[1]+template_size[1]/2+offset_y)/height
