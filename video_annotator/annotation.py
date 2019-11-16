@@ -61,7 +61,10 @@ class Annotations():
             annotation_file_path = self.file_path
         output = {}
         for ann_id,ann in self.annotations.items():
-            output[ann_id] = ann.manual.data
+            output[ann_id] = {
+                    'manual': ann.manual.data,
+                    'template_matched': ann.template_matched.data
+            }
         with open(annotation_file_path, 'wb') as f:
             pickle.dump(output, f)
         print('saving to', annotation_file_path)
@@ -109,7 +112,8 @@ class Annotation():
     def __delitem__(self, frame_index):
         del self.manual[frame_index]
     def load(self,data):
-        self.manual.data = data
+        self.manual.data = data['manual']
+        self.template_matched.data = data['template_matched']
 
 class SparseAnnotation():
     def __init__(self):
