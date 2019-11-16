@@ -216,28 +216,53 @@ class Net(torch.nn.Module):
 
 if __name__=='__main__':
     #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
+    #d = VideoDataset('/home/howard/Code/video-annotator/dataset')
     #d.to_photo_dataset()
 
-    transform = torchvision.transforms.Compose([
+    train_transform = torchvision.transforms.Compose([
         RandomCrop(500),
         ToTensor()
     ])
-    dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=transform)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=3)
+    test_transform = torchvision.transforms.Compose([
+        CentreCrop(500),
+        ToTensor()
+    ])
+    train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
+    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
     net = Net()
 
     optimizer = torch.optim.Adam(net.parameters())
 
     vis_criterion = torch.nn.BCEWithLogitsLoss()
     coord_criterion = torch.nn.MSELoss()
-    while True:
+    #while True:
+    for _ in range(10):
+        test_total_loss = 0
+        test_total_vis_loss = 0
+        test_total_coord_loss = 0
+        for x in tqdm(test_dataloader):
+            vis = x['visible'].float().squeeze()
+            coord = x['coordinates']
+            coord_pred,vis_pred = net(x['image'])
+            vis_pred = vis_pred.squeeze()
+            vis_loss = vis_criterion(vis_pred,vis)
+            coord_loss = coord_criterion(coord_pred,coord)
+            loss = vis_loss + coord_loss
+
+            test_total_loss += loss.item()
+            test_total_vis_loss += vis_loss.item()
+            test_total_coord_loss += coord_loss.item()
+
         total_loss = 0
         total_vis_loss = 0
         total_coord_loss = 0
-        for x in tqdm(dataloader):
-            vis = x['visible'].view(-1,1).float()
+        for x in tqdm(train_dataloader):
+            vis = x['visible'].float().squeeze()
             coord = x['coordinates']
             coord_pred,vis_pred = net(x['image'])
+            vis_pred = vis_pred.squeeze()
             vis_loss = vis_criterion(vis_pred,vis)
             coord_loss = coord_criterion(coord_pred,coord)
             loss = vis_loss + coord_loss
@@ -249,4 +274,5 @@ if __name__=='__main__':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        print(total_loss, total_vis_loss, total_coord_loss)
+        print('Test',test_total_loss, test_total_vis_loss, test_total_coord_loss)
+        print('Train',total_loss, total_vis_loss, total_coord_loss)
