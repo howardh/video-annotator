@@ -4,6 +4,10 @@ import pickle
 import random
 import numbers
 
+import matplotlib
+matplotlib.use('Agg')
+from matplotlib import pyplot as plt
+
 import cv2
 import torch
 import torchvision
@@ -181,7 +185,7 @@ class ToTensor(object):
         output = sample.copy()
         output['image'] = self.transform(sample['image'])
         if sample['coordinates'] is None:
-            output['coordinates'] = torch.empty([2])
+            output['coordinates'] = torch.zeros([2])
         else:
             output['coordinates'] = torch.tensor(sample['coordinates'])
         output['visible'] = torch.tensor(sample['visible'])
@@ -209,7 +213,8 @@ class Net(torch.nn.Module):
         )
         self.coordinate = torch.nn.Sequential(
             torch.nn.Linear(in_features=96,out_features=48),
-            torch.nn.Linear(in_features=48,out_features=2)
+            torch.nn.Linear(in_features=48,out_features=2),
+            torch.nn.Sigmoid()
         )
     def forward(self,x):
         x = self.seq(x)
@@ -241,6 +246,8 @@ if __name__=='__main__':
 
     vis_criterion = torch.nn.BCEWithLogitsLoss()
     coord_criterion = torch.nn.MSELoss(reduce=False)
+    train_loss_history = []
+    test_loss_history = []
     #while True:
     for _ in range(10):
         test_total_loss = 0
@@ -284,3 +291,11 @@ if __name__=='__main__':
             optimizer.step()
         print('Test',test_total_loss, test_total_vis_loss, test_total_coord_loss)
         print('Train',total_loss, total_vis_loss, total_coord_loss)
+        train_loss_history.append(total_loss)
+        test_loss_history.append(test_total_loss)
+
+        plt.plot(range(len(train_loss_history)), train_loss_history,label='Training Loss')
+        plt.plot(range(len(test_loss_history)), test_loss_history,label='Testing Loss')
+        plt.legend(loc='best')
+        plt.savefig('plot.png')
+        plt.close()
