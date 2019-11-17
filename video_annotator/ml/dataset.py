@@ -196,26 +196,25 @@ class ToTensor(object):
 class Net(torch.nn.Module):
     def __init__(self):
         super().__init__()
+        self.base = torchvision.models.resnet18(pretrained=True)
         self.seq = torch.nn.Sequential(
-            torch.nn.Conv2d(in_channels=3,out_channels=6,kernel_size=(6,6),stride=2),
-            torch.nn.MaxPool2d(kernel_size=(2,2)),
-            torch.nn.Conv2d(in_channels=6,out_channels=12,kernel_size=(6,6),stride=2),
-            torch.nn.MaxPool2d(kernel_size=(2,2)),
-            torch.nn.Conv2d(in_channels=12,out_channels=24,kernel_size=(4,4),stride=1),
-            torch.nn.MaxPool2d(kernel_size=(2,2)),
-            torch.nn.Conv2d(in_channels=24,out_channels=48,kernel_size=(4,4),stride=1),
-            torch.nn.MaxPool2d(kernel_size=(2,2)),
-            torch.nn.Dropout2d(p=0.2),
-            torch.nn.Conv2d(in_channels=48,out_channels=96,kernel_size=(4,4),stride=1),
-            torch.nn.MaxPool2d(kernel_size=(2,2))
+            self.base.conv1,
+            self.base.bn1,
+            self.base.relu,
+            self.base.maxpool,
+            self.base.layer1,
+            self.base.layer2,
+            self.base.layer3,
+            self.base.layer4,
+            self.base.avgpool
         )
         self.classifier = torch.nn.Sequential(
-            torch.nn.Linear(in_features=96,out_features=48),
-            torch.nn.Linear(in_features=48,out_features=1)
+            torch.nn.Linear(in_features=512,out_features=256),
+            torch.nn.Linear(in_features=256,out_features=1)
         )
         self.coordinate = torch.nn.Sequential(
-            torch.nn.Linear(in_features=96,out_features=48),
-            torch.nn.Linear(in_features=48,out_features=2),
+            torch.nn.Linear(in_features=512,out_features=256),
+            torch.nn.Linear(in_features=256,out_features=2),
             torch.nn.Sigmoid()
         )
     def forward(self,x):
@@ -255,12 +254,12 @@ if __name__=='__main__':
     #d.to_photo_dataset()
 
     train_transform = torchvision.transforms.Compose([
-        RandomCrop(500),
+        RandomCrop(224),
         #CentreCrop(500),
         ToTensor()
     ])
     test_transform = torchvision.transforms.Compose([
-        CentreCrop(500),
+        CentreCrop(224),
         ToTensor()
     ])
     train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
@@ -271,6 +270,8 @@ if __name__=='__main__':
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
     net = Net()
+    for p in net.seq.parameters():
+        p.requires_grad = False
 
     optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
 
