@@ -1,12 +1,12 @@
-import os
-import argparse
-import tkinter
-
-from video import Video
-from annotation import Annotations
-import gui
-
 def main(args):
+    # Imports are here so we don't need to wait for them to load unecessarily.
+    import os
+    import tkinter
+
+    from video import Video
+    from annotation import Annotations
+    import gui
+
     # Parameters
     video_file_path = args.video_file_path
     annotation_file_path = args.annotation_file_path
@@ -37,6 +37,7 @@ def main(args):
     video.close()
 
 if __name__=='__main__':
+    import argparse
     parser = argparse.ArgumentParser(description='Video Annotation')
     parser.add_argument('--video_file_path', type=str, required=True,
                         help='Path to the video file to be annotated.')
