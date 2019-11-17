@@ -3,6 +3,8 @@ from tqdm import tqdm
 import pickle
 import random
 import numbers
+import itertools
+import numpy as np
 
 import matplotlib
 matplotlib.use('Agg')
@@ -223,6 +225,30 @@ class Net(torch.nn.Module):
         coord = self.coordinate(x)
         return coord, visible
 
+def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
+    output = []
+    batch_size = max(x['image'].shape[0],n)
+    for i in range(batch_size):
+        img = x['image'][i].permute(1,2,0).numpy()*255
+        img = img.copy()
+        w,h,_ = img.shape
+        # Draw ground truth
+        if x['visible'][i]:
+            cx,cy = (x['coordinates'][i]*torch.tensor([w,h])).long()
+            cv2.line(img,(cx-5,cy),(cx+5,cy),(255,0,0))
+            cv2.line(img,(cx,cy-5),(cx,cy+5),(255,0,0))
+        # Draw prediction
+        if vis_pred[i]:
+            cx,cy = (coord_pred[i]*torch.tensor([w,h])).long()
+            cv2.line(img,(cx-5,cy),(cx+5,cy),(0,255,0))
+            cv2.line(img,(cx,cy-5),(cx,cy+5),(0,255,0))
+        # Add to output
+        output.append(img)
+    # Concatenate outputs
+    output = np.concatenate(output,axis=1)
+    # Save image
+    cv2.imwrite(file_name,output)
+
 if __name__=='__main__':
     #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
     #d = VideoDataset('/home/howard/Code/video-annotator/dataset')
@@ -230,6 +256,7 @@ if __name__=='__main__':
 
     train_transform = torchvision.transforms.Compose([
         RandomCrop(500),
+        #CentreCrop(500),
         ToTensor()
     ])
     test_transform = torchvision.transforms.Compose([
@@ -237,7 +264,10 @@ if __name__=='__main__':
         ToTensor()
     ])
     train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
-    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
+    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
+    #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
+    train_dataset = torch.utils.data.Subset(train_dataset,range(10))
+    test_dataset = torch.utils.data.Subset(test_dataset,range(10))
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
     net = Net()
@@ -248,8 +278,8 @@ if __name__=='__main__':
     coord_criterion = torch.nn.MSELoss(reduce=False)
     train_loss_history = []
     test_loss_history = []
-    #while True:
-    for _ in range(10):
+    tqdm = lambda x: x
+    for _ in itertools.count():
         test_total_loss = 0
         test_total_vis_loss = 0
         test_total_coord_loss = 0
@@ -267,6 +297,7 @@ if __name__=='__main__':
             test_total_loss += loss.item()
             test_total_vis_loss += vis_loss.item()
             test_total_coord_loss += coord_loss.item()
+        output_predictions('test_predictions.png',x,vis_pred,coord_pred)
 
         total_loss = 0
         total_vis_loss = 0
@@ -289,6 +320,7 @@ if __name__=='__main__':
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+        output_predictions('train_predictions.png',x,vis_pred,coord_pred)
         print('Test',test_total_loss, test_total_vis_loss, test_total_coord_loss)
         print('Train',total_loss, total_vis_loss, total_coord_loss)
         train_loss_history.append(total_loss)
