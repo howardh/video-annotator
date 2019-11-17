@@ -28,9 +28,6 @@ class VideoDataset(torch.utils.data.Dataset):
             fc = vid.frame_count
             for frame_index in range(0,fc,fc//10):
                 self.dataset_index_mapping.append([vid_index,frame_index])
-        for i in range(len(self.file_names)):
-            for ann in self.get_annotations(i).annotations.values():
-                ann.template_matched.generate(0)
 
     def get_video(self,index):
         if index not in self.videos:
@@ -62,7 +59,7 @@ class VideoDataset(torch.utils.data.Dataset):
         if not os.path.isdir(photos_dir):
             os.makedirs(photos_dir)
         annotations = {}
-        for i in tqdm(range(len(self))):
+        for i in tqdm(range(len(self)),desc='Creating Photo Dataset'):
             frame = self[i]['frame']
             ann = self[i]['annotations']
             photo_file_name = os.path.join(photos_dir,'%d.png'%i)
@@ -72,6 +69,8 @@ class VideoDataset(torch.utils.data.Dataset):
                     continue
                 annotations[i] = v
                 break
+            if i not in annotations:
+                annotations[i] = None
         with open(os.path.join(self.dataset_dir,'photo-annotations.pkl'), 'wb') as f:
             pickle.dump(annotations, f)
 
@@ -193,11 +192,16 @@ class Net(torch.nn.Module):
         super().__init__()
         self.seq = torch.nn.Sequential(
             torch.nn.Conv2d(in_channels=3,out_channels=6,kernel_size=(6,6),stride=2),
+            torch.nn.MaxPool2d(kernel_size=(2,2)),
             torch.nn.Conv2d(in_channels=6,out_channels=12,kernel_size=(6,6),stride=2),
-            torch.nn.Conv2d(in_channels=12,out_channels=24,kernel_size=(6,6),stride=2),
-            torch.nn.Conv2d(in_channels=24,out_channels=48,kernel_size=(6,6),stride=2),
-            torch.nn.Conv2d(in_channels=48,out_channels=96,kernel_size=(6,6),stride=2),
-            torch.nn.Conv2d(in_channels=96,out_channels=96,kernel_size=(11,11))
+            torch.nn.MaxPool2d(kernel_size=(2,2)),
+            torch.nn.Conv2d(in_channels=12,out_channels=24,kernel_size=(4,4),stride=1),
+            torch.nn.MaxPool2d(kernel_size=(2,2)),
+            torch.nn.Conv2d(in_channels=24,out_channels=48,kernel_size=(4,4),stride=1),
+            torch.nn.MaxPool2d(kernel_size=(2,2)),
+            torch.nn.Dropout2d(p=0.2),
+            torch.nn.Conv2d(in_channels=48,out_channels=96,kernel_size=(4,4),stride=1),
+            torch.nn.MaxPool2d(kernel_size=(2,2))
         )
         self.classifier = torch.nn.Sequential(
             torch.nn.Linear(in_features=96,out_features=48),
@@ -228,27 +232,29 @@ if __name__=='__main__':
         ToTensor()
     ])
     train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
-    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
+    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
     net = Net()
 
-    optimizer = torch.optim.Adam(net.parameters())
+    optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
 
     vis_criterion = torch.nn.BCEWithLogitsLoss()
-    coord_criterion = torch.nn.MSELoss()
+    coord_criterion = torch.nn.MSELoss(reduce=False)
     #while True:
     for _ in range(10):
         test_total_loss = 0
         test_total_vis_loss = 0
         test_total_coord_loss = 0
+        net.eval()
         for x in tqdm(test_dataloader):
-            vis = x['visible'].float().squeeze()
+            vis = x['visible'].float().view(-1,1)
             coord = x['coordinates']
             coord_pred,vis_pred = net(x['image'])
-            vis_pred = vis_pred.squeeze()
+            vis_pred = vis_pred.view(-1,1)
             vis_loss = vis_criterion(vis_pred,vis)
             coord_loss = coord_criterion(coord_pred,coord)
+            coord_loss = (coord_loss*vis).sum()
             loss = vis_loss + coord_loss
 
             test_total_loss += loss.item()
@@ -258,13 +264,15 @@ if __name__=='__main__':
         total_loss = 0
         total_vis_loss = 0
         total_coord_loss = 0
+        net.train()
         for x in tqdm(train_dataloader):
-            vis = x['visible'].float().squeeze()
+            vis = x['visible'].float().view(-1,1)
             coord = x['coordinates']
             coord_pred,vis_pred = net(x['image'])
-            vis_pred = vis_pred.squeeze()
+            vis_pred = vis_pred.view(-1,1)
             vis_loss = vis_criterion(vis_pred,vis)
             coord_loss = coord_criterion(coord_pred,coord)
+            coord_loss = (coord_loss*vis).sum()
             loss = vis_loss + coord_loss
 
             total_loss += loss.item()
