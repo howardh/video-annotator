@@ -169,7 +169,7 @@ class CentreCrop(RandomCrop):
         return i, j, th, tw
 
 class Normalize(object):
-    def __init__(self, mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]):
+    def __init__(self, mean=np.array([0.485, 0.456, 0.406]), std=np.array([0.229, 0.224, 0.225])):
         self.transform = torchvision.transforms.Normalize(
                 mean=mean,
                 std=std,
@@ -225,22 +225,31 @@ class Net(torch.nn.Module):
         return coord, visible
 
 def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    unnormalize = torchvision.transforms.Normalize(
+            mean=-mean/std,
+            std=1/std,
+            inplace=False
+    )
+
     output = []
-    batch_size = max(x['image'].shape[0],n)
+    batch_size = min(x['image'].shape[0],n)
     for i in range(batch_size):
-        img = x['image'][i].permute(1,2,0).numpy()*255
+        img = unnormalize(x['image'][i]).permute(1,2,0).numpy()*255
         img = img.copy()
         w,h,_ = img.shape
         # Draw ground truth
-        if x['visible'][i]:
+        if x['visible'][i] > 0.5:
             cx,cy = (x['coordinates'][i]*torch.tensor([w,h])).long()
             cv2.line(img,(cx-5,cy),(cx+5,cy),(255,0,0))
             cv2.line(img,(cx,cy-5),(cx,cy+5),(255,0,0))
         # Draw prediction
-        if vis_pred[i]:
-            cx,cy = (coord_pred[i]*torch.tensor([w,h])).long()
+        cx,cy = (coord_pred[i]*torch.tensor([w,h])).long()
+        if vis_pred[i] > 0:
             cv2.line(img,(cx-5,cy),(cx+5,cy),(0,255,0))
             cv2.line(img,(cx,cy-5),(cx,cy+5),(0,255,0))
+        cv2.putText(img, '%.2f'%torch.sigmoid(vis_pred[i]), (cx,cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0,255,0))
         # Add to output
         output.append(img)
     # Concatenate outputs
@@ -256,24 +265,27 @@ if __name__=='__main__':
     train_transform = torchvision.transforms.Compose([
         RandomCrop(224),
         #CentreCrop(500),
-        ToTensor()
+        ToTensor(),
+        Normalize(),
     ])
     test_transform = torchvision.transforms.Compose([
         CentreCrop(224),
-        ToTensor()
+        ToTensor(),
+        Normalize(),
     ])
     train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
     test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
     #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
-    train_dataset = torch.utils.data.Subset(train_dataset,range(10))
-    test_dataset = torch.utils.data.Subset(test_dataset,range(10))
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
+    train_dataset = torch.utils.data.Subset(train_dataset,range(3))
+    test_dataset = torch.utils.data.Subset(test_dataset,range(3))
+    #train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, sampler=torch.utils.data.RandomSampler(train_dataset,replacement=True,num_samples=16))
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
     net = Net()
     for p in net.seq.parameters():
         p.requires_grad = False
 
-    optimizer = torch.optim.Adam(net.parameters(), lr=1e-3)
+    optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 
     vis_criterion = torch.nn.BCEWithLogitsLoss()
     coord_criterion = torch.nn.MSELoss(reduce=False)
@@ -329,6 +341,7 @@ if __name__=='__main__':
 
         plt.plot(range(len(train_loss_history)), train_loss_history,label='Training Loss')
         plt.plot(range(len(test_loss_history)), test_loss_history,label='Testing Loss')
+        plt.grid()
         plt.legend(loc='best')
         plt.savefig('plot.png')
         plt.close()
