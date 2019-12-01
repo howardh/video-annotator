@@ -276,7 +276,7 @@ if __name__=='__main__':
     train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
     test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
     #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
-    train_dataset = torch.utils.data.Subset(train_dataset,range(3))
+    #train_dataset = torch.utils.data.Subset(train_dataset,range(3))
     test_dataset = torch.utils.data.Subset(test_dataset,range(3))
     #train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
     train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, sampler=torch.utils.data.RandomSampler(train_dataset,replacement=True,num_samples=16))

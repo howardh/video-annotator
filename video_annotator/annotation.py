@@ -76,26 +76,30 @@ class Annotations():
             manu_ann = ann['manual']
             if manu_ann is not None:
                 centre = manu_ann
-                centre = (int(centre[0]*width),
-                          int(centre[1]*height))
-                cv2.circle(frame, center=centre,
-                        radius=10, color=(0,255,0),
-                        thickness=5, lineType=8, shift=0)
+                cx,cy = (int(centre[0]*width),
+                        int(centre[1]*height))
+                cs = 10 # Cross size
+                cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
+                        color=(0,255,0),thickness=1)
+                cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+                        color=(0,255,0),thickness=1)
             gen_ann = ann['template_matched']
             if gen_ann is not None:
                 centre = gen_ann
-                centre = (int(centre[0]*width),
-                          int(centre[1]*height))
-                cv2.circle(frame, center=centre,
-                        radius=10, color=(255,0,0),
-                        thickness=5, lineType=8, shift=0)
+                cx,cy = (int(centre[0]*width),
+                        int(centre[1]*height))
+                cs = 10 # Cross size
+                cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
+                        color=(255,0,0),thickness=1)
+                cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+                        color=(255,0,0),thickness=1)
             gen_path = self[ann_id].template_matched[frame_index-num_frames:frame_index]
             for c0,c1 in zip(gen_path,gen_path[1:]):
                 if c0 is None or c1 is None:
                     continue
                 c0 = (int(c0[0]*width),int(c0[1]*height))
                 c1 = (int(c1[0]*width),int(c1[1]*height))
-                cv2.line(frame,c0,c1,color=(255,0,0),thickness=3)
+                cv2.line(frame,c0,c1,color=(255,0,0),thickness=2)
         return frame
 
 class Annotation():
