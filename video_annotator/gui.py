@@ -8,49 +8,44 @@ import time
 import templatematcher
 
 class App:
-    SEEKBAR_H_PADDING=10
-    SEEKBAR_HEIGHT=40
-
-    def __init__(self, window, video, annotations):
+    def __init__(self, window, state):
         self.window = window
         self.window.title('Video Annotator')
-        self.video = video
-        self.annotations = annotations
+        self.state = state
 
-        self.paused = True
-        self.current_frame_index = 0
-        self.annotation_id = 0
         self.last_update = time.process_time()
 
-        #self.canvas = tkinter.Canvas(
-        #        window, width=video.width, height=video.height)
         self.canvas = tkinter.Canvas(window)
-        self.seekbar = tkinter.Canvas(
-                window, width=video.width, height=App.SEEKBAR_HEIGHT)
+        self.canvas.pack()
+        self.seekbar = SeekBar(window, state)
 
         self.image_id = None
 
-        self.canvas.pack()
-        self.seekbar.pack()
         self.create_menu()
 
         self.window.bind('<Configure>', self.handle_resize)
-        self.window.bind('<Control-s>', lambda e: self.save())
+
+        self.window.bind('<Control-s>', lambda e: self.state.save())
         self.window.bind('q', lambda e: self.quit())
-        self.window.bind('<space>', self.toggle_pause)
-        self.window.bind('n', self.jump_to_keyframe_nearest)
-        self.window.bind('<Control-Left>', self.jump_to_keyframe_prev)
-        self.window.bind('<Control-Right>', self.jump_to_keyframe_next)
-        self.window.bind('<Left>', self.jump_to_prev_frame)
-        self.window.bind('<Right>', self.jump_to_next_frame)
-        self.window.bind('<Up>', lambda e: self.prev_annotation())
-        self.window.bind('<Down>', lambda e: self.next_annotation())
-        self.window.bind('<Delete>', self.delete_keyframe)
+        self.window.bind('<space>', lambda e: self.toggle_pause())
+        self.window.bind('n', lambda e: self.state.jump_to_keyframe_nearest())
+        self.window.bind('<Control-Left>',
+                lambda e: self.state.jump_to_keyframe_prev())
+        self.window.bind('<Control-Right>',
+                lambda e: self.state.jump_to_keyframe_next())
+        self.window.bind('<Left>', lambda e: self.state.jump_to_prev_frame())
+        self.window.bind('<Right>', lambda e: self.state.jump_to_next_frame())
+        self.window.bind('<Up>', lambda e: self.state.prev_annotation())
+        self.window.bind('<Down>', lambda e: self.state.next_annotation())
+        self.window.bind('<Delete>', lambda e: self.state.delete_keyframe())
 
         self.canvas.bind('<Button-1>', self.handle_video_click)
         self.canvas.bind('<Button-3>', self.handle_video_click)
-        self.seekbar.bind('<Button-1>', self.handle_seekbar_click)
         self.window.bind('g', lambda e: self.generate_annotations())
+
+        self.state.add_callback('video',self.render_current_frame)
+        self.state.add_callback('annotations',self.seekbar.render)
+        self.state.add_callback('pause',self.update)
 
         self.update()
         self.window.mainloop()
@@ -60,20 +55,20 @@ class App:
 
         file_menu = tkinter.Menu(menu_bar, tearoff=0)
         file_menu.add_command(label="Open", command=lambda: None)
-        file_menu.add_command(label="Save", command=self.save)
+        file_menu.add_command(label="Save", command=self.state.save)
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
         menu_bar.add_cascade(label="File", menu=file_menu)
 
         edit_menu = tkinter.Menu(menu_bar, tearoff=0)
-        edit_menu.add_command(label="New Annotation", command=self.new_annotation)
-        edit_menu.add_command(label="Delete Annotation", command=self.delete_annotation)
+        edit_menu.add_command(label="New Annotation", command=self.state.new_annotation)
+        edit_menu.add_command(label="Delete Annotation", command=self.state.delete_annotation)
         edit_menu.add_separator()
         edit_menu.add_command(label="Clear Annotation",
-                command=self.clear_annotation)
+                command=self.state.clear_annotation)
         edit_menu.add_separator()
         edit_menu.add_command(label="Generate Annotation Path",
-                command=self.generate_annotations)
+                command=self.state.generate_annotations)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
 
         self.window.config(menu=menu_bar)
@@ -81,8 +76,8 @@ class App:
     def handle_resize(self, event):
         w_width = self.window.winfo_width()
         w_height = self.window.winfo_height()
-        v_width = self.video.width
-        v_height = self.video.height
+        v_width = self.state.video.width
+        v_height = self.state.video.height
         scale = min(w_width/v_width,w_height/v_height)
 
         if w_height > 100:
@@ -94,166 +89,31 @@ class App:
         canvas_height = scale*v_height
 
         self.canvas.config(width=canvas_width,height=canvas_height)
+        self.seekbar.resize(canvas_width)
+        print('resize',canvas_width,canvas_height)
         self.render_current_frame()
-        self.render_seekbar()
-
-    def save(self):
-        self.annotations.save_annotations()
-
-    def delete_keyframe(self, event):
-        self.annotations.remove_annotation(self.current_frame_index, self.annotation_id)
-        self.render_current_frame()
-        self.render_seekbar()
-
-    def jump_to_keyframe_nearest(self, event):
-        kf_indices = list(self.annotations[self.annotation_id].keys())
-        if len(kf_indices) == 0:
-            return
-        index = self.current_frame_index
-        closest_index = min(kf_indices, key=lambda x: abs(index-x))
-        self.current_frame_index = closest_index
-        print('%d -> %d' % (index, closest_index))
-        self.render_current_frame()
-
-    def jump_to_keyframe_prev(self, event):
-        index = self.current_frame_index
-        kf_indices = self.annotations[self.annotation_id].manual.keys()
-        kf_indices = filter(lambda x: x<index, kf_indices)
-        kf_indices = list(kf_indices)
-        if len(kf_indices) == 0:
-            return
-        closest_index = min(kf_indices, key=lambda x: abs(index-x))
-        self.current_frame_index = closest_index
-        print('%d -> %d' % (index, closest_index))
-        self.render_current_frame()
-        self.render_seekbar()
-
-    def jump_to_prev_frame(self, event):
-        if self.current_frame_index > 0:
-            self.current_frame_index -= 1
-            self.render_current_frame()
-
-    def jump_to_next_frame(self, event):
-        if self.current_frame_index < self.video.frame_count:
-            self.current_frame_index += 1
-            self.render_current_frame()
-
-    def jump_to_keyframe_next(self, event):
-        index = self.current_frame_index
-        kf_indices = self.annotations[self.annotation_id].manual.keys()
-        kf_indices = filter(lambda x: x>index, kf_indices)
-        kf_indices = list(kf_indices)
-        if len(kf_indices) == 0:
-            return
-        closest_index = min(kf_indices, key=lambda x: abs(index-x))
-        self.current_frame_index = closest_index
-        print('%d -> %d' % (index, closest_index))
-        self.render_current_frame()
-        self.render_seekbar()
-
-    def generate_annotations(self):
-        self.annotations[self.annotation_id].template_matched.generate(
-                self.current_frame_index)
-        self.render_current_frame()
-        self.render_seekbar()
-
-    def prev_annotation(self):
-        ann_ids = sorted(self.annotations.annotations.keys())
-        ann_ids.reverse()
-        for i in ann_ids:
-            if i < self.annotation_id:
-                self.annotation_id = i
-                print('Selected annotation %d/%d'%(len(ann_ids)-ann_ids.index(self.annotation_id),len(ann_ids)))
-                break
-        self.render_seekbar()
-
-    def next_annotation(self):
-        ann_ids = sorted(self.annotations.annotations.keys())
-        for i in ann_ids:
-            if i > self.annotation_id:
-                self.annotation_id = i
-                print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
-                break
-        self.render_seekbar()
-
-    def new_annotation(self):
-        annotation_id = max(self.annotations.get_ids())+1
-        self.annotations[annotation_id] # Access it to create it
-        self.annotation_id = annotation_id
-        self.render_seekbar()
-        # Console output
-        ann_ids = sorted(self.annotations.get_ids())
-        print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
-
-    def delete_annotation(self):
-        deleted_id = self.annotation_id
-        del self.annotations[deleted_id]
-        # Set selected annotation to the previous annotation
-        # i.e. Find largest ID that's smaller than the deleted ID
-        self.prev_annotation()
-        self.next_annotation()
-        # Console output
-        ann_ids = sorted(self.annotations.get_ids())
-        print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
-
-    def clear_annotation(self):
-        self.annotations[self.annotation_id] = {}
-        self.render_seekbar()
-
-    def seek(self, frame):
-        if type(frame) is int:
-            self.current_frame_index = frame
-        elif type(frame) is float:
-            self.current_frame_index = int(frame*self.video.frame_count)
-        else:
-            raise TypeError('Unsupported type: %s. Expected int or float.' % (type(frame)))
-        if self.current_frame_index < 0:
-            self.current_frame_index = 0
-        if self.current_frame_index > self.video.frame_count:
-            self.current_frame_index = self.video.frame_count
-        self.render_current_frame()
+        self.seekbar.render()
 
     def handle_video_click(self, event):
         if event.num == 1:
             width = event.widget.winfo_width()
             height = event.widget.winfo_height()
-            self.annotations.add_annotation(
-                    frame_index=self.current_frame_index,
-                    annotation_id=self.annotation_id,
+            self.state.add_annotation(
                     annotation=(event.x/width, event.y/height))
         elif event.num == 3:
-            self.annotations.add_annotation(
-                    frame_index=self.current_frame_index,
-                    annotation_id=self.annotation_id,
-                    annotation=None)
-        self.render_current_frame()
-        self.render_seekbar()
+            self.state.add_annotation(annotation=None)
 
-    def handle_seekbar_click(self, event):
-        h_padding = App.SEEKBAR_H_PADDING
-        width = event.widget.winfo_width()
-        height = event.widget.winfo_height()
-        seekto_percent = (event.x-h_padding)/(width-h_padding*2)
-        print('Seekbar click',width,height,event.x,event.y)
-        self.seek(seekto_percent)
-        self.render_seekbar()
-
-    def toggle_pause(self, event):
-        self.paused = not self.paused
-        if not self.paused:
-            self.update()
+    def toggle_pause(self):
+        self.state.toggle_pause()
 
     def quit(self):
         self.window.destroy()
 
     def render_current_frame(self):
-        frame = self.video.get_frame(self.current_frame_index)
-        frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
-        frame = self.annotations.render(frame, self.current_frame_index)
-        c_width = self.canvas.winfo_width()
-        c_height = self.canvas.winfo_height()
-        v_width = self.video.width
-        v_height = self.video.height
+        frame = self.state.get_frame(render_annotations=True)
+        c_width = float(self.canvas.cget('width'))
+        c_height = float(self.canvas.cget('height'))
+        v_height, v_width, _ = frame.shape
         scale = min(c_width/v_width,c_height/v_height)
         dims = (int(v_width*scale),int(v_height*scale))
         if dims[0] < 1 or dims[1] < 1:
@@ -263,15 +123,55 @@ class App:
         self.photo = PIL.ImageTk.PhotoImage(image=PIL.Image.fromarray(frame))
         self.image_id = self.canvas.create_image(c_width/2, c_height/2, image=self.photo, anchor=tkinter.CENTER)
 
-    def render_seekbar(self):
-        width = self.seekbar.winfo_width()
-        height = self.seekbar.winfo_height()
-        h_padding = App.SEEKBAR_H_PADDING
+    def update(self):
+        self.state.update()
+        if self.state.paused:
+            return
 
-        self.seekbar.delete('all')
+        new_process_time = time.process_time()
+        time_diff = new_process_time-self.last_update
+        self.last_update = new_process_time
+        #delay = int(1000/self.video.fps-time_diff)
+        delay = 1
+        self.window.after(delay, self.update)
+
+class SeekBar:
+    SEEKBAR_H_PADDING=10
+    SEEKBAR_HEIGHT=40
+
+    def __init__(self, parent, state):
+        self.parent = parent
+        self.state = state
+        self.canvas = tkinter.Canvas(self.parent,
+                width=self.parent.winfo_width(),
+                height=self.SEEKBAR_HEIGHT)
+        print(self.parent.winfo_width())
+        self.canvas.pack()
+
+        self.canvas.bind('<Button-1>', self.handle_click)
+
+    def resize(self, width):
+        self.canvas.config(width=width,height=self.SEEKBAR_HEIGHT)
+        self.render()
+
+    def handle_click(self, event):
+        h_padding = self.SEEKBAR_H_PADDING
+        width = event.widget.winfo_width()
+        height = event.widget.winfo_height()
+        seekto_percent = (event.x-h_padding)/(width-h_padding*2)
+        print('Seekbar click',width,height,event.x,event.y)
+        self.state.seek(seekto_percent)
+        self.render()
+
+    def render(self):
+        width = self.canvas.winfo_width()
+        height = self.canvas.winfo_height()
+        h_padding = SeekBar.SEEKBAR_H_PADDING
+
+        self.canvas.delete('all')
 
         # Background
-        self.seekbar.create_rectangle(0, 0, width, height, fill='white')
+        self.canvas.create_rectangle(0, 0, width, height, fill='white')
 
         # Annotation markers
         def draw_annotations(colour1, colour2, anns):
@@ -280,40 +180,20 @@ class App:
                     colour = colour2
                 else:
                     colour = colour1
-                pos = frame/self.video.frame_count*(width-h_padding*2)
-                self.seekbar.create_line(
+                pos = frame/self.state.video.frame_count*(width-h_padding*2)
+                self.canvas.create_line(
                         h_padding+pos, 0, h_padding+pos, height, fill=colour)
-        for ann_id,anns in self.annotations.annotations.items():
-            if ann_id == self.annotation_id:
+        for ann_id,anns in self.state.annotations.annotations.items():
+            if ann_id == self.state.annotation_id:
                 continue
             draw_annotations('#cccccc','#ffcccc',anns.manual)
-        draw_annotations('black','red',self.annotations[self.annotation_id].manual)
+        draw_annotations('black','red',self.state.annotations[self.state.annotation_id].manual)
 
         # Current position marker
-        pos = self.current_frame_index/self.video.frame_count*(width-h_padding*2)
+        pos = self.state.current_frame_index/self.state.video.frame_count*(width-h_padding*2)
         polygon = np.array([[0,0],[5,-10],[-5,-10]], dtype=np.float)
         polygon += [h_padding+pos,height/2]
         polygon = polygon.flatten().tolist()
-        self.seekbar.create_polygon(polygon, fill='black')
-        self.seekbar.create_line(
+        self.canvas.create_polygon(polygon, fill='black')
+        self.canvas.create_line(
                 h_padding, height/2, width-h_padding, height/2)
-
-    def update(self):
-        if self.paused:
-            self.render_current_frame()
-            self.render_seekbar()
-            return
-        if self.current_frame_index >= self.video.frame_count-1:
-            self.paused = True
-            return
-
-        self.current_frame_index += 1
-        self.render_current_frame()
-        self.render_seekbar()
-
-        new_process_time = time.process_time()
-        time_diff = new_process_time-self.last_update
-        self.last_update = new_process_time
-        #delay = int(1000/self.video.fps-time_diff)
-        delay = 1
-        self.window.after(delay, self.update)
