@@ -89,7 +89,7 @@ class App:
         canvas_height = scale*v_height
 
         self.canvas.config(width=canvas_width,height=canvas_height)
-        self.seekbar.resize(canvas_width)
+        self.seekbar.resize(w_width)
         print('resize',canvas_width,canvas_height)
         self.render_current_frame()
         self.seekbar.render()
