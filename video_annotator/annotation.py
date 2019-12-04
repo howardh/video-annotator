@@ -195,7 +195,7 @@ class DenseAnnotation():
 class TemplateMatchedAnnotations(DenseAnnotation):
     def __init__(self, video, manual_annotations):
         super().__init__()
-        self.video = video
+        self.video = video.clone()
         self.annotations = manual_annotations
         self.templates = Templates(video,manual_annotations,size=(64,64))
     def generate(self,starting_index):
@@ -215,6 +215,25 @@ class TemplateMatchedAnnotations(DenseAnnotation):
                 self[frame_index] = ann
         except KeyboardInterrupt:
             pass
+    def generate2(self,starting_index):
+        # Validate data
+        if self.video is None:
+            raise Exception('Video must be provided to generate annotations.')
+        # Check if there's enough data
+        if len(self.annotations) == 0:
+            return
+        # Generate annotation for each frame
+        num_frames = self.video.frame_count
+        funcs = []
+        def foo(i):
+            frame_index = i+starting_index
+            ann = self.search_frame(
+                    frame_index,
+                    window_size=(128,128))
+            self[frame_index] = ann
+        for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
+            funcs.append(foo)
+        return funcs
     def search_frame(self,frame_index,window_size,
             method=cv2.TM_SQDIFF_NORMED):
         width = self.video.width

@@ -16,7 +16,7 @@ def clip(val,min_val,max_val):
 class Templates:
     def __init__(self,video,manual_annotations,size):
         self.templates = {}
-        self.video = video
+        self.video = video.clone()
         self.annotations = manual_annotations
         self.size = size
     def __getitem__(self,index):

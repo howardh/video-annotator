@@ -41,14 +41,23 @@ class App:
 
         self.canvas.bind('<Button-1>', self.handle_video_click)
         self.canvas.bind('<Button-3>', self.handle_video_click)
-        self.window.bind('g', lambda e: self.generate_annotations())
+        self.window.bind('g', lambda e: self.state.generate_annotations())
 
         self.state.add_callback('video',self.render_current_frame)
         self.state.add_callback('annotations',self.seekbar.render)
         self.state.add_callback('pause',self.update)
+        self.state.add_callback('background',self.update_title)
 
         self.update()
         self.window.mainloop()
+
+    def update_title(self):
+        if len(self.state.background_tasks) == 0:
+            self.window.title('Video Annotator')
+        else:
+            current_task = self.state.background_tasks[0]
+            progress = current_task.i/len(current_task)*100
+            self.window.title('Video Annotator (%.1f%%)' % progress)
 
     def create_menu(self):
         menu_bar = tkinter.Menu(self.window)

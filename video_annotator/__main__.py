@@ -1,4 +1,28 @@
 import cv2
+import threading
+from tqdm import tqdm
+import time
+
+class BackgroundTask(threading.Thread):
+    def __init__(self,funcs,progress_callbacks=[],
+            done_callback=lambda s: None):
+        super().__init__()
+        self.funcs = funcs
+        self.progress_callbacks = progress_callbacks
+        self.done_callback = done_callback
+        self.i = None
+        self.t = time.process_time()
+    def run(self):
+        for self.i,func in tqdm(enumerate(self.funcs)):
+            func(self.i)
+            t = time.process_time()
+            if t-self.t > 1:
+                for c in self.progress_callbacks:
+                    c()
+                self.t = t
+        self.done_callback(self)
+    def __len__(self):
+        return len(self.funcs)
 
 class State:
     def __init__(self, video, annotations):
@@ -12,8 +36,10 @@ class State:
         self.callbacks = {
                 'video': [],
                 'annotations': [],
-                'pause': []
+                'pause': [],
+                'background': []
         }
+        self.background_tasks = []
 
     def add_callback(self, key, callback):
         self.callbacks[key].append(callback)
@@ -21,6 +47,18 @@ class State:
     def call_callbacks(self, key):
         for f in self.callbacks[key]:
             f()
+
+    def launch_bg_task(self, funcs):
+        def done_callback(task):
+            print('done',task)
+            self.background_tasks.remove(task)
+            if len(self.background_tasks) > 0:
+                self.background_tasks[0].start()
+            self.call_callbacks('background')
+        task = BackgroundTask(funcs,self.callbacks['background'],done_callback)
+        self.background_tasks.append(task)
+        if len(self.background_tasks) == 1:
+            task.start()
 
     def save(self):
         self.annotations.save_annotations()
@@ -80,10 +118,9 @@ class State:
         self.call_callbacks('annotations')
 
     def generate_annotations(self):
-        self.annotations[self.annotation_id].template_matched.generate(
+        funcs = self.annotations[self.annotation_id].template_matched.generate2(
                 self.current_frame_index)
-        self.call_callbacks('video')
-        self.call_callbacks('annotations')
+        self.launch_bg_task(funcs)
 
     def prev_annotation(self):
         ann_ids = sorted(self.annotations.annotations.keys())
