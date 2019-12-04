@@ -24,6 +24,9 @@ class BackgroundTask(threading.Thread):
     def __len__(self):
         return len(self.funcs)
 
+def bounded(v,min_val,max_val):
+    return min(max(v,min_val),max_val)
+
 class State:
     def __init__(self, video, annotations):
         self.video = video
@@ -32,6 +35,9 @@ class State:
         self.annotation_id = 0
         self.paused = True
         self.current_frame_index = 0
+
+        self.zoom = 1
+        self.zoom_centre = (self.video.width//2, self.video.height//2)
 
         self.callbacks = {
                 'video': [],
@@ -193,14 +199,58 @@ class State:
             self.paused = p
         self.call_callbacks('pause')
 
+    def zoom_in(self):
+        self.zoom += 0.1
+        self.call_callbacks('video')
+        print(self.zoom)
+    def zoom_out(self):
+        self.zoom -= 0.1
+        if self.zoom < 1:
+            self.zoom = 1
+        self.call_callbacks('video')
+    def zoom_reset(self):
+        self.zoom = 1
+        self.call_callbacks('video')
+    def zoom_translate(self,dx,dy):
+        # Vars
+        x,y = self.zoom_centre
+        z = self.zoom
+        w,h = self.video.width, self.video.height
+        # Compute
+        x = bounded(x-dx/z,w/z//2,w-w/z//2)
+        y = bounded(y-dy/z,h/z//2,h-h/z//2)
+        # Save results
+        self.zoom_centre = x,y
+        print('translate',dx,dy)
+        self.call_callbacks('video')
+
     def get_frame(self, render_annotations=True):
         frame = self.video.get_frame(self.current_frame_index)
         frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
         if render_annotations:
             frame = self.annotations.render(frame, self.current_frame_index)
+        # Compute Zoom Size
+        h,w,_ = frame.shape
+        zx,zy = self.zoom_centre
+        zx = int(zx)
+        zy = int(zy)
+        zw = int(w//self.zoom)
+        zh = int(h//self.zoom)
+        left = bounded(zx-zw//2,0,w-zw)
+        top = bounded(zy-zh//2,0,h-zh)
+        cropped_frame = frame[top:top+zh,left:left+zw,:]
+        frame = cv2.resize(cropped_frame,(w,h))
         return frame
     
     def add_annotation(self,annotation):
+        if annotation is not None:
+            z = self.zoom
+            zx,zy = self.zoom_centre
+            w,h = self.video.width, self.video.height
+            x,y = annotation
+            x = (zx-w/z/2+x*w/z)/w
+            y = (zy-h/z/2+y*h/z)/h
+            annotation = x,y
         self.annotations.add_annotation(
                 frame_index=self.current_frame_index,
                 annotation_id=self.annotation_id,
@@ -215,5 +265,3 @@ class State:
             self.paused = True
             return
         self.jump_to_next_frame()
-
-

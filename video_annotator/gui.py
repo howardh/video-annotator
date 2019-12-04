@@ -38,10 +38,19 @@ class App:
         self.window.bind('<Up>', lambda e: self.state.prev_annotation())
         self.window.bind('<Down>', lambda e: self.state.next_annotation())
         self.window.bind('<Delete>', lambda e: self.state.delete_keyframe())
+        self.window.bind('<KeyPress>', self.handle_key_press)
 
-        self.canvas.bind('<Button-1>', self.handle_video_click)
-        self.canvas.bind('<Button-3>', self.handle_video_click)
+        #self.canvas.bind('<Button-1>', self.handle_video_click)
+        #self.canvas.bind('<Button-3>', self.handle_video_click)
+        #self.canvas.bind('<B1-Motion>', self.handle_video_drag)
         self.window.bind('g', lambda e: self.state.generate_annotations())
+
+        self.canvas.bind('<Button-1>', self.handle_mouse_down)
+        self.canvas.bind('<Button-3>', self.handle_mouse_down)
+        self.canvas.bind('<ButtonRelease-1>', self.handle_mouse_up)
+        self.canvas.bind('<ButtonRelease-3>', self.handle_mouse_up)
+        self.canvas.bind('<B1-Motion>', self.handle_mouse_move)
+        self.mouse_down_coords = None
 
         self.state.add_callback('video',self.render_current_frame)
         self.state.add_callback('annotations',self.seekbar.render)
@@ -103,14 +112,50 @@ class App:
         self.render_current_frame()
         self.seekbar.render()
 
-    def handle_video_click(self, event):
-        if event.num == 1:
-            width = event.widget.winfo_width()
-            height = event.widget.winfo_height()
+    def handle_key_press(self, event):
+        c = event.char
+        if c == '+':
+            self.state.zoom_in()
+        elif c == '-':
+            self.state.zoom_out()
+
+    def handle_mouse_down(self, event):
+        self.mouse_down_coords = (event.x, event.y)
+
+    def handle_mouse_up(self, event):
+        x,y = self.mouse_down_coords
+        dx = event.x - x
+        dy = event.y - y
+        button = event.num
+        if dx**2+dy**2 < 10:
+            print('click',x,y,button)
+            self.handle_video_click(event.x,event.y,button)
+        else:
+            print('drag end',x,y)
+        self.mouse_down_coords = None
+
+    def handle_mouse_move(self, event):
+        x,y = self.mouse_down_coords
+        dx = event.x - x
+        dy = event.y - y
+        if dx**2+dy**2 < 10:
+            return
+        print('drag (%d,%d) to (%d,%d)' % (x,y,event.x,event.y))
+        self.handle_video_drag(x,y,event.x,event.y)
+
+    def handle_video_click(self, x, y, button):
+        if button == 1:
+            width = self.canvas.winfo_width()
+            height = self.canvas.winfo_height()
             self.state.add_annotation(
-                    annotation=(event.x/width, event.y/height))
-        elif event.num == 3:
+                    annotation=(x/width, y/height))
+        elif button == 3:
             self.state.add_annotation(annotation=None)
+
+    def handle_video_drag(self, start_x,start_y,end_x,end_y):
+        dx = end_x-start_x
+        dy = end_y-start_y
+        self.state.zoom_translate(dx,dy)
 
     def toggle_pause(self):
         self.state.toggle_pause()
