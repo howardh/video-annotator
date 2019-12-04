@@ -51,6 +51,7 @@ class App:
         self.canvas.bind('<ButtonRelease-3>', self.handle_mouse_up)
         self.canvas.bind('<B1-Motion>', self.handle_mouse_move)
         self.mouse_down_coords = None
+        self.mouse_drag_prev_coords = None
 
         self.state.add_callback('video',self.render_current_frame)
         self.state.add_callback('annotations',self.seekbar.render)
@@ -118,6 +119,8 @@ class App:
             self.state.zoom_in()
         elif c == '-':
             self.state.zoom_out()
+        elif c == '=':
+            self.state.zoom_reset()
 
     def handle_mouse_down(self, event):
         self.mouse_down_coords = (event.x, event.y)
@@ -132,16 +135,30 @@ class App:
             self.handle_video_click(event.x,event.y,button)
         else:
             print('drag end',x,y)
+            self.handle_video_drag(x,y,event.x,event.y)
+            self.mouse_drag_prev_coords = None
         self.mouse_down_coords = None
 
     def handle_mouse_move(self, event):
         x,y = self.mouse_down_coords
         dx = event.x - x
         dy = event.y - y
-        if dx**2+dy**2 < 10:
+        if dx**2+dy**2 < 10 and self.mouse_drag_prev_coords is None:
             return
         print('drag (%d,%d) to (%d,%d)' % (x,y,event.x,event.y))
-        self.handle_video_drag(x,y,event.x,event.y)
+
+        if self.mouse_drag_prev_coords is None:
+            self.mouse_drag_prev_coords = self.mouse_down_coords
+
+        x,y = self.mouse_drag_prev_coords
+        dx = event.x - x
+        dy = event.y - y
+
+        print('drag change (%d,%d)' % (dx,dy))
+
+        self.mouse_drag_prev_coords = event.x,event.y
+
+        self.state.zoom_translate(dx,dy)
 
     def handle_video_click(self, x, y, button):
         if button == 1:
@@ -155,7 +172,6 @@ class App:
     def handle_video_drag(self, start_x,start_y,end_x,end_y):
         dx = end_x-start_x
         dy = end_y-start_y
-        self.state.zoom_translate(dx,dy)
 
     def toggle_pause(self):
         self.state.toggle_pause()
