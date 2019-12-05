@@ -12,6 +12,7 @@ class BackgroundTask(threading.Thread):
         self.done_callback = done_callback
         self.i = None
         self.t = time.process_time()
+        self.kill_flag = False
     def run(self):
         for self.i,func in tqdm(enumerate(self.funcs)):
             func(self.i)
@@ -20,7 +21,11 @@ class BackgroundTask(threading.Thread):
                 for c in self.progress_callbacks:
                     c()
                 self.t = t
+            if self.kill_flag:
+                break
         self.done_callback(self)
+    def kill(self):
+        self.kill_flag = True
     def __len__(self):
         return len(self.funcs)
 
@@ -65,6 +70,9 @@ class State:
         self.background_tasks.append(task)
         if len(self.background_tasks) == 1:
             task.start()
+
+    def kill_current_bg_task(self):
+        self.background_tasks[0].kill()
 
     def save(self):
         self.annotations.save_annotations()

@@ -40,10 +40,8 @@ class App:
         self.window.bind('<Delete>', lambda e: self.state.delete_keyframe())
         self.window.bind('<KeyPress>', self.handle_key_press)
 
-        #self.canvas.bind('<Button-1>', self.handle_video_click)
-        #self.canvas.bind('<Button-3>', self.handle_video_click)
-        #self.canvas.bind('<B1-Motion>', self.handle_video_drag)
         self.window.bind('g', lambda e: self.state.generate_annotations())
+        self.window.bind('k', lambda e: self.state.kill_current_bg_task())
 
         self.canvas.bind('<Button-1>', self.handle_mouse_down)
         self.canvas.bind('<Button-3>', self.handle_mouse_down)
