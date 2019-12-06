@@ -63,7 +63,9 @@ class Annotations():
         for ann_id,ann in self.annotations.items():
             output[ann_id] = {
                     'manual': ann.manual.data,
-                    'template_matched': ann.template_matched.data
+                    'template_matched': ann.template_matched.data,
+                    'template_size': ann.get_template_size(),
+                    'window_size': ann.get_window_size()
             }
         with open(annotation_file_path, 'wb') as f:
             pickle.dump(output, f)
@@ -74,14 +76,19 @@ class Annotations():
         for ann_id in self.annotations.keys():
             ann = self[ann_id][frame_index]
             manu_ann = ann['manual']
+            temp_size = self[ann_id].get_template_size()[0]
+            win_size = self[ann_id].get_window_size()[0]
             if manu_ann is not None:
                 centre = manu_ann
                 cx,cy = (int(centre[0]*width),
                         int(centre[1]*height))
-                cs = 10 # Cross size
+                cs = int(temp_size//2) # Cross size
+                ws = int(win_size//2) # Window size
                 cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
                         color=(0,255,0),thickness=1)
                 cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+                        color=(0,255,0),thickness=1)
+                cv2.rectangle(frame,rec=(cx-ws,cy-ws,ws*2,ws*2),
                         color=(0,255,0),thickness=1)
             gen_ann = ann['template_matched']
             if gen_ann is not None:
@@ -118,6 +125,22 @@ class Annotation():
     def load(self,data):
         self.manual.data = data['manual']
         self.template_matched.data = data['template_matched']
+        self.set_window_size(data.pop('window_size',(128,128)))
+        self.set_template_size(data.pop('template_size',(64,64)))
+    def set_window_size(self,size):
+        if type(size) is int:
+            self.template_matched.window_size = (size,size)
+        elif type(size) is tuple:
+            self.template_matched.window_size = size
+    def set_template_size(self,size):
+        if type(size) is int:
+            self.template_matched.templates.set_size((size,size))
+        elif type(size) is tuple:
+            self.template_matched.templates.set_size(size)
+    def get_window_size(self):
+        return self.template_matched.window_size
+    def get_template_size(self):
+        return self.template_matched.templates.size
 
 class SparseAnnotation():
     def __init__(self):
@@ -198,6 +221,7 @@ class TemplateMatchedAnnotations(DenseAnnotation):
         self.video = video.clone()
         self.annotations = manual_annotations
         self.templates = Templates(video,manual_annotations,size=(64,64))
+        self.window_size = (128,128)
     def generate(self,starting_index):
         # Validate data
         if self.video is None:
@@ -211,7 +235,7 @@ class TemplateMatchedAnnotations(DenseAnnotation):
             for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
                 ann = self.search_frame(
                         frame_index,
-                        window_size=(128,128))
+                        window_size=self.window_size)
                 self[frame_index] = ann
         except KeyboardInterrupt:
             pass
@@ -229,7 +253,7 @@ class TemplateMatchedAnnotations(DenseAnnotation):
             frame_index = i+starting_index
             ann = self.search_frame(
                     frame_index,
-                    window_size=(128,128))
+                    window_size=self.window_size)
             self[frame_index] = ann
         for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
             funcs.append(foo)

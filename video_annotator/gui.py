@@ -78,14 +78,25 @@ class App:
         menu_bar.add_cascade(label="File", menu=file_menu)
 
         edit_menu = tkinter.Menu(menu_bar, tearoff=0)
-        edit_menu.add_command(label="New Annotation", command=self.state.new_annotation)
-        edit_menu.add_command(label="Delete Annotation", command=self.state.delete_annotation)
+        edit_menu.add_command(label="New Annotation",
+                command=self.state.new_annotation)
+        edit_menu.add_command(label="Delete Annotation",
+                command=self.state.delete_annotation)
         edit_menu.add_separator()
         edit_menu.add_command(label="Clear Annotation",
                 command=self.state.clear_annotation)
         edit_menu.add_separator()
         edit_menu.add_command(label="Generate Annotation Path",
                 command=self.state.generate_annotations)
+        edit_menu.add_separator()
+        edit_menu.add_command(label="Increase Window Size",
+                command=self.state.inc_window_size)
+        edit_menu.add_command(label="Decrease Window Size",
+                command=self.state.dec_window_size)
+        edit_menu.add_command(label="Increase Template Size",
+                command=self.state.inc_template_size)
+        edit_menu.add_command(label="Decrease Template Size",
+                command=self.state.dec_template_size)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
 
         self.window.config(menu=menu_bar)

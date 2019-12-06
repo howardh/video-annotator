@@ -54,11 +54,9 @@ class State:
 
     def add_callback(self, key, callback):
         self.callbacks[key].append(callback)
-
     def call_callbacks(self, key):
         for f in self.callbacks[key]:
             f()
-
     def launch_bg_task(self, funcs):
         def done_callback(task):
             print('done',task)
@@ -70,7 +68,6 @@ class State:
         self.background_tasks.append(task)
         if len(self.background_tasks) == 1:
             task.start()
-
     def kill_current_bg_task(self):
         self.background_tasks[0].kill()
 
@@ -81,7 +78,6 @@ class State:
         self.annotations.remove_annotation(self.current_frame_index, self.annotation_id)
         self.call_callbacks('video')
         self.call_callbacks('annotations')
-
     def jump_to_keyframe_nearest(self):
         kf_indices = list(self.annotations[self.annotation_id].keys())
         if len(kf_indices) == 0:
@@ -92,7 +88,6 @@ class State:
         print('%d -> %d' % (index, closest_index))
         self.call_callbacks('video')
         self.call_callbacks('annotations')
-
     def jump_to_keyframe_prev(self):
         index = self.current_frame_index
         kf_indices = self.annotations[self.annotation_id].manual.keys()
@@ -105,19 +100,16 @@ class State:
         print('%d -> %d' % (index, closest_index))
         self.call_callbacks('video')
         self.call_callbacks('annotations')
-
     def jump_to_prev_frame(self):
         if self.current_frame_index > 0:
             self.current_frame_index -= 1
             self.call_callbacks('video')
             self.call_callbacks('annotations')
-
     def jump_to_next_frame(self):
         if self.current_frame_index < self.video.frame_count:
             self.current_frame_index += 1
             self.call_callbacks('video')
             self.call_callbacks('annotations')
-
     def jump_to_keyframe_next(self):
         index = self.current_frame_index
         kf_indices = self.annotations[self.annotation_id].manual.keys()
@@ -146,7 +138,6 @@ class State:
                 break
         self.call_callbacks('video')
         self.call_callbacks('annotations')
-
     def next_annotation(self):
         ann_ids = sorted(self.annotations.annotations.keys())
         for i in ann_ids:
@@ -156,18 +147,15 @@ class State:
                 break
         self.call_callbacks('video')
         self.call_callbacks('annotations')
-
     def new_annotation(self):
         annotation_id = max(self.annotations.get_ids())+1
         self.annotations[annotation_id] # Access it to create it
         self.annotation_id = annotation_id
-        self.render_seekbar()
         # Console output
         ann_ids = sorted(self.annotations.get_ids())
         print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
         self.call_callbacks('video')
         self.call_callbacks('annotations')
-
     def delete_annotation(self):
         deleted_id = self.annotation_id
         del self.annotations[deleted_id]
@@ -180,11 +168,30 @@ class State:
         print('Selected annotation %d/%d'%(ann_ids.index(self.annotation_id)+1,len(ann_ids)))
         self.call_callbacks('video')
         self.call_callbacks('annotations')
-
     def clear_annotation(self):
         self.annotations[self.annotation_id] = {}
         self.call_callbacks('video')
         self.call_callbacks('annotations')
+
+    def inc_window_size(self):
+        size = self.annotations[self.annotation_id].get_window_size()[0]
+        self.annotations[self.annotation_id].set_window_size(size*2)
+        print(size)
+        self.call_callbacks('video')
+    def dec_window_size(self):
+        size = self.annotations[self.annotation_id].get_window_size()[0]
+        self.annotations[self.annotation_id].set_window_size(size//2)
+        print(size)
+        self.call_callbacks('video')
+    def inc_template_size(self):
+        size = self.annotations[self.annotation_id].get_template_size()[0]
+        self.annotations[self.annotation_id].set_template_size(size*2)
+        print(size)
+        self.call_callbacks('video')
+    def dec_template_size(self):
+        size = self.annotations[self.annotation_id].get_template_size()[0]
+        self.annotations[self.annotation_id].set_template_size(size//2)
+        self.call_callbacks('video')
 
     def seek(self, frame):
         if type(frame) is int:

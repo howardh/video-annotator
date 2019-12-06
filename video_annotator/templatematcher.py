@@ -38,5 +38,8 @@ class Templates:
             template = frame[y:(y+size[1]),x:(x+size[0]),:]
             self.templates[nearest_index] = template
         return self.templates[nearest_index]
+    def set_size(self,size):
+        self.size = size
+        self.clear()
     def clear(self):
         self.templates = {}
