@@ -19,7 +19,7 @@ from video_annotator.annotation import Annotations
 from video_annotator.video import Video
 
 class VideoDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset_dir):
+    def __init__(self, dataset_dir, frames_per_vid=10):
         self.dataset_dir = dataset_dir
         self.videos_dir = os.path.join(dataset_dir,'videos')
         self.annotations_dir = os.path.join(dataset_dir,'annotations')
@@ -32,7 +32,7 @@ class VideoDataset(torch.utils.data.Dataset):
         for vid_index in range(len(self.file_names)):
             vid = self.get_video(vid_index)
             fc = vid.frame_count
-            for frame_index in range(0,fc,fc//10):
+            for frame_index in range(0,fc,fc//frames_per_vid):
                 self.dataset_index_mapping.append([vid_index,frame_index])
 
     def get_video(self,index):
@@ -64,19 +64,17 @@ class VideoDataset(torch.utils.data.Dataset):
         photos_dir = os.path.join(self.dataset_dir,'photos')
         if not os.path.isdir(photos_dir):
             os.makedirs(photos_dir)
-        annotations = {}
+        annotations = []
         for i in tqdm(range(len(self)),desc='Creating Photo Dataset'):
             frame = self[i]['frame']
             ann = self[i]['annotations']
             photo_file_name = os.path.join(photos_dir,'%d.png'%i)
             cv2.imwrite(photo_file_name,frame)
-            for k,v in ann['template_matched'].items(): # Take first available annotation for now
+            annotations.append([])
+            for k,v in ann['template_matched'].items():
                 if v is None:
                     continue
-                annotations[i] = v
-                break
-            if i not in annotations:
-                annotations[i] = None
+                annotations[i].append(v)
         with open(os.path.join(self.dataset_dir,'photo-annotations.pkl'), 'wb') as f:
             pickle.dump(annotations, f)
 
@@ -96,14 +94,34 @@ class PhotoDataset(torch.utils.data.Dataset):
         output = {
                 'image': cv2.imread(photo_file_name),
                 'coordinates': self.annotations[index],
-		'visible': self.annotations[index] is not None
+		'visible': len(self.annotations[index]) > 0
         }
         if self.transform is not None:
             output = self.transform(output)
         return output
 
     def __len__(self):
-        return len(self.annotations.keys())
+        return len(self.annotations)
+
+class RandomScale(object):
+    def __init__(self, min_size):
+        self.min_size = min_size
+    @staticmethod
+    def get_params(img, min_size):
+        h,w,_ = img.shape
+        mh = min_size
+        mw = min_size
+        min_scale = max(mh/h,mw/w)
+        scale = random.random()*(1-min_scale)+min_scale
+        return int(w*scale),int(h*scale)
+    @staticmethod
+    def scale_image(size, img):
+        return img.resize(size)
+    def __call__(self, sample):
+        output = sample.copy()
+        w,h = self.get_params(output['image'],self.min_size)
+        output['image'] = cv2.resize(sample['image'],(w,h))
+        return output
 
 class RandomCrop(object):
     def __init__(self, size):
@@ -153,8 +171,8 @@ class RandomCrop(object):
 
         i,j,th,tw = self.get_params(output['image'],self.size)
         output['image'] = self.crop_image((i,j), self.size, sample['image'])
-        output['coordinates'] = self.crop_coordinates((i,j), self.size, sample['image'], sample['coordinates'])
-        output['visible'] = self.crop_visible(sample['visible'],output['coordinates'])
+        output['coordinates'] = [self.crop_coordinates((i,j), self.size, sample['image'], c) for c in sample['coordinates']]
+        output['visible'] = any([self.crop_visible(sample['visible'],c) for c in output['coordinates']])
         return output
 
 class CentreCrop(RandomCrop):
@@ -178,6 +196,21 @@ class Normalize(object):
     def __call__(self, sample):
         output = sample.copy()
         output['image'] = self.transform(sample['image'])
+        return output
+
+class FilterCoords(object):
+    def __call__(self, sample):
+        coord = None
+        for c in sample['coordinates']:
+            if c is None:
+                continue
+            if c[0] < 0 or c[0] > 1 or c[1] < 0 or c[1] > 1:
+                continue
+            coord = c
+            break
+        output = sample.copy()
+        output['coordinates'] = coord
+        output['visible'] = coord is not None
         return output
 
 class ToTensor(object):
@@ -263,24 +296,32 @@ if __name__=='__main__':
     #d.to_photo_dataset()
 
     train_transform = torchvision.transforms.Compose([
+        RandomScale(224),
         RandomCrop(224),
         #CentreCrop(500),
+        FilterCoords(),
         ToTensor(),
         Normalize(),
     ])
     test_transform = torchvision.transforms.Compose([
         CentreCrop(224),
+        FilterCoords(),
         ToTensor(),
         Normalize(),
     ])
-    train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
+    #train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
+    train_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=train_transform)
     test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
     #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
     #train_dataset = torch.utils.data.Subset(train_dataset,range(3))
     test_dataset = torch.utils.data.Subset(test_dataset,range(3))
-    #train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, shuffle=True)
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, sampler=torch.utils.data.RandomSampler(train_dataset,replacement=True,num_samples=16))
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
+    #train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, sampler=torch.utils.data.RandomSampler(train_dataset,replacement=True,num_samples=16))
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
+
+    print('Train set size',len(train_dataset))
+    print('Test set size', len(test_dataset))
+
     net = Net()
     for p in net.seq.parameters():
         p.requires_grad = False
