@@ -103,6 +103,23 @@ class PhotoDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.annotations)
 
+class Scale(object):
+    def __init__(self, size):
+        self.size = size
+    @staticmethod
+    def get_params(img, size):
+        h,w,_ = img.shape
+        scale = max(size/h,size/w)
+        return int(w*scale),int(h*scale)
+    @staticmethod
+    def scale_image(size, img):
+        return img.resize(size)
+    def __call__(self, sample):
+        output = sample.copy()
+        w,h = self.get_params(output['image'],self.size)
+        output['image'] = cv2.resize(sample['image'],(w,h))
+        return output
+
 class RandomScale(object):
     def __init__(self, min_size):
         self.min_size = min_size
@@ -267,8 +284,8 @@ def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
     )
 
     output = []
-    batch_size = min(x['image'].shape[0],n)
-    for i in range(batch_size):
+    indices = [int((x['image'].shape[0]-1)/n*i) for i in range(n)]
+    for i in indices:
         img = unnormalize(x['image'][i]).permute(1,2,0).numpy()*255
         img = img.copy()
         w,h,_ = img.shape
@@ -296,6 +313,7 @@ if __name__=='__main__':
     #d.to_photo_dataset()
 
     train_transform = torchvision.transforms.Compose([
+        Scale(300),
         RandomScale(224),
         RandomCrop(224),
         #CentreCrop(500),
@@ -304,19 +322,26 @@ if __name__=='__main__':
         Normalize(),
     ])
     test_transform = torchvision.transforms.Compose([
+        Scale(224),
         CentreCrop(224),
         FilterCoords(),
         ToTensor(),
         Normalize(),
     ])
     #train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
-    train_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=train_transform)
-    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
+    #train_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=train_transform)
+    #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
     #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
-    #train_dataset = torch.utils.data.Subset(train_dataset,range(3))
-    test_dataset = torch.utils.data.Subset(test_dataset,range(3))
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
-    #train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=16, sampler=torch.utils.data.RandomSampler(train_dataset,replacement=True,num_samples=16))
+
+    # Overfit datasets (No stochasticity)
+    train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
+    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
+    #n=3
+    #train_dataset = torch.utils.data.Subset(train_dataset,range(n))
+    #test_dataset = torch.utils.data.Subset(test_dataset,range(n))
+
+    # Dataloaders
+    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=20, shuffle=True, drop_last=True)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
 
     print('Train set size',len(train_dataset))
@@ -328,10 +353,14 @@ if __name__=='__main__':
 
     optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 
-    vis_criterion = torch.nn.BCEWithLogitsLoss()
+    vis_criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
     coord_criterion = torch.nn.MSELoss(reduce=False)
     train_loss_history = []
     test_loss_history = []
+
+    vw=1
+    cw=1
+
     tqdm = lambda x: x
     for _ in itertools.count():
         test_total_loss = 0
@@ -343,46 +372,61 @@ if __name__=='__main__':
             coord = x['coordinates']
             coord_pred,vis_pred = net(x['image'])
             vis_pred = vis_pred.view(-1,1)
-            vis_loss = vis_criterion(vis_pred,vis)
+            vis_loss = vis_criterion(vis_pred,vis).sum()
+            vis_loss = vw*vis_loss
             coord_loss = coord_criterion(coord_pred,coord)
             coord_loss = (coord_loss*vis).sum()
+            coord_loss = cw*coord_loss
             loss = vis_loss + coord_loss
 
-            test_total_loss += loss.item()
-            test_total_vis_loss += vis_loss.item()
-            test_total_coord_loss += coord_loss.item()
-        output_predictions('test_predictions.png',x,vis_pred,coord_pred)
+            test_total_loss += loss.item()/len(test_dataset)
+            test_total_vis_loss += vis_loss.item()/len(test_dataset)
+            test_total_coord_loss += coord_loss.item()/len(test_dataset)
+        output_predictions('figs/test_predictions.png',x,vis_pred,coord_pred)
 
         total_loss = 0
         total_vis_loss = 0
         total_coord_loss = 0
         net.train()
+        visible_count = 0
+        batch_count = 0
         for x in tqdm(train_dataloader):
             vis = x['visible'].float().view(-1,1)
             coord = x['coordinates']
             coord_pred,vis_pred = net(x['image'])
             vis_pred = vis_pred.view(-1,1)
-            vis_loss = vis_criterion(vis_pred,vis)
+            num_samples = vis.shape[0]
+            num_vis = max(vis.sum(),1)
+            num_invis = max(num_samples-num_vis,1)
+            vis_weight = vis*(1/num_vis) + (1-vis)*(1/num_invis)
+            vis_loss = (vis_weight*vis_criterion(vis_pred,vis)).sum()
+            vis_loss = vw*vis_loss
             coord_loss = coord_criterion(coord_pred,coord)
             coord_loss = (coord_loss*vis).sum()
+            coord_loss = cw*coord_loss
             loss = vis_loss + coord_loss
 
-            total_loss += loss.item()
-            total_vis_loss += vis_loss.item()
-            total_coord_loss += coord_loss.item()
+            total_loss += loss.item()/len(train_dataset)
+            total_vis_loss += vis_loss.item()/len(train_dataset)
+            total_coord_loss += coord_loss.item()/len(train_dataset)
+            visible_count += vis.sum()
+            batch_count += vis.shape[0]
 
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
-        output_predictions('train_predictions.png',x,vis_pred,coord_pred)
+        output_predictions('figs/train_predictions.png',x,vis_pred,coord_pred)
         print('Test',test_total_loss, test_total_vis_loss, test_total_coord_loss)
         print('Train',total_loss, total_vis_loss, total_coord_loss)
-        train_loss_history.append(total_loss)
-        test_loss_history.append(test_total_loss)
+        print('Vis',visible_count/batch_count)
+        train_loss_history.append(np.log(total_loss))
+        test_loss_history.append(np.log(test_total_loss))
 
         plt.plot(range(len(train_loss_history)), train_loss_history,label='Training Loss')
         plt.plot(range(len(test_loss_history)), test_loss_history,label='Testing Loss')
+        plt.xlabel('# Iterations')
+        plt.ylabel('Log Loss')
         plt.grid()
         plt.legend(loc='best')
-        plt.savefig('plot.png')
+        plt.savefig('figs/plot.png')
         plt.close()
