@@ -291,11 +291,11 @@ def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
         w,h,_ = img.shape
         # Draw ground truth
         if x['visible'][i] > 0.5:
-            cx,cy = (x['coordinates'][i]*torch.tensor([w,h])).long()
+            cx,cy = (x['coordinates'][i].cpu()*torch.tensor([w,h])).long()
             cv2.line(img,(cx-5,cy),(cx+5,cy),(255,0,0))
             cv2.line(img,(cx,cy-5),(cx,cy+5),(255,0,0))
         # Draw prediction
-        cx,cy = (coord_pred[i]*torch.tensor([w,h])).long()
+        cx,cy = (coord_pred[i].cpu()*torch.tensor([w,h])).long()
         if vis_pred[i] > 0:
             cv2.line(img,(cx-5,cy),(cx+5,cy),(0,255,0))
             cv2.line(img,(cx,cy-5),(cx,cy+5),(0,255,0))
@@ -311,6 +311,14 @@ if __name__=='__main__':
     #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
     #d = VideoDataset('/home/howard/Code/video-annotator/dataset')
     #d.to_photo_dataset()
+
+    use_gpu = torch.cuda.is_available()
+    if use_gpu:
+        print('GPU found')
+        device = torch.device('cuda')
+    else:
+        print('No GPU found')
+        device = torch.device('cpu')
 
     train_transform = torchvision.transforms.Compose([
         Scale(300),
@@ -334,15 +342,17 @@ if __name__=='__main__':
     #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
 
     # Overfit datasets (No stochasticity)
-    train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
-    test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
+    train_dataset = PhotoDataset('smalldataset', transform=train_transform)
+    test_dataset = PhotoDataset('smalldataset', transform=test_transform)
     #n=3
     #train_dataset = torch.utils.data.Subset(train_dataset,range(n))
     #test_dataset = torch.utils.data.Subset(test_dataset,range(n))
 
     # Dataloaders
-    train_dataloader = torch.utils.data.DataLoader(train_dataset, batch_size=20, shuffle=True, drop_last=True)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16, shuffle=False)
+    train_dataloader = torch.utils.data.DataLoader(train_dataset,
+            batch_size=20, shuffle=True, drop_last=True, pin_memory=use_gpu)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16,
+            shuffle=True, pin_memory=use_gpu)
 
     print('Train set size',len(train_dataset))
     print('Test set size', len(test_dataset))
@@ -350,6 +360,7 @@ if __name__=='__main__':
     net = Net()
     for p in net.seq.parameters():
         p.requires_grad = False
+    net.to(device)
 
     optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 
@@ -361,16 +372,16 @@ if __name__=='__main__':
     vw=1
     cw=1
 
-    tqdm = lambda x: x
-    for _ in itertools.count():
+    #tqdm = lambda x: x
+    for iteration in itertools.count():
         test_total_loss = 0
         test_total_vis_loss = 0
         test_total_coord_loss = 0
         net.eval()
         for x in tqdm(test_dataloader):
-            vis = x['visible'].float().view(-1,1)
-            coord = x['coordinates']
-            coord_pred,vis_pred = net(x['image'])
+            vis = x['visible'].float().view(-1,1).to(device)
+            coord = x['coordinates'].to(device)
+            coord_pred,vis_pred = net(x['image'].to(device))
             vis_pred = vis_pred.view(-1,1)
             vis_loss = vis_criterion(vis_pred,vis).sum()
             vis_loss = vw*vis_loss
@@ -391,9 +402,9 @@ if __name__=='__main__':
         visible_count = 0
         batch_count = 0
         for x in tqdm(train_dataloader):
-            vis = x['visible'].float().view(-1,1)
-            coord = x['coordinates']
-            coord_pred,vis_pred = net(x['image'])
+            vis = x['visible'].float().view(-1,1).to(device)
+            coord = x['coordinates'].to(device)
+            coord_pred,vis_pred = net(x['image'].to(device))
             vis_pred = vis_pred.view(-1,1)
             num_samples = vis.shape[0]
             num_vis = max(vis.sum(),1)
@@ -416,17 +427,27 @@ if __name__=='__main__':
             loss.backward()
             optimizer.step()
         output_predictions('figs/train_predictions.png',x,vis_pred,coord_pred)
+        print('Iteration',iteration)
         print('Test',test_total_loss, test_total_vis_loss, test_total_coord_loss)
         print('Train',total_loss, total_vis_loss, total_coord_loss)
         print('Vis',visible_count/batch_count)
-        train_loss_history.append(np.log(total_loss))
-        test_loss_history.append(np.log(test_total_loss))
+        train_loss_history.append(total_loss)
+        test_loss_history.append(test_total_loss)
 
         plt.plot(range(len(train_loss_history)), train_loss_history,label='Training Loss')
         plt.plot(range(len(test_loss_history)), test_loss_history,label='Testing Loss')
         plt.xlabel('# Iterations')
-        plt.ylabel('Log Loss')
+        plt.ylabel('Loss')
         plt.grid()
         plt.legend(loc='best')
         plt.savefig('figs/plot.png')
+        plt.close()
+
+        plt.plot(range(len(train_loss_history)), [np.log(x) for x in train_loss_history],label='Training Loss')
+        plt.plot(range(len(test_loss_history)), [np.log(x) for x in test_loss_history],label='Testing Loss')
+        plt.xlabel('# Iterations')
+        plt.ylabel('Log Loss')
+        plt.grid()
+        plt.legend(loc='best')
+        plt.savefig('figs/log-plot.png')
         plt.close()
