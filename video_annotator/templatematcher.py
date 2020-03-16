@@ -30,7 +30,7 @@ class Templates:
         if nearest_index not in self.templates:
             width = self.video.width
             height = self.video.height
-            size = self.size
+            size = [int(self.size[0]*width),int(self.size[1]*height)] # Template dimensions
             coord = self.annotations[nearest_index]
             frame = self.video.get_frame(nearest_index)
             x = clip(int(width*coord[0]-size[0]/2),0,width-1)

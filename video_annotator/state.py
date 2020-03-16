@@ -124,7 +124,7 @@ class State:
         self.call_callbacks('annotations')
 
     def generate_annotations(self):
-        funcs = self.annotations[self.annotation_id].template_matched.generate2(
+        funcs = self.annotations[self.annotation_id].template_matched.generate(
                 self.current_frame_index)
         self.launch_bg_task(funcs)
 
@@ -180,7 +180,7 @@ class State:
         self.call_callbacks('video')
     def dec_window_size(self):
         size = self.annotations[self.annotation_id].get_window_size()[0]
-        self.annotations[self.annotation_id].set_window_size(size//2)
+        self.annotations[self.annotation_id].set_window_size(size/2)
         print(size)
         self.call_callbacks('video')
     def inc_template_size(self):

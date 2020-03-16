@@ -76,19 +76,20 @@ class Annotations():
         for ann_id in self.annotations.keys():
             ann = self[ann_id][frame_index]
             manu_ann = ann['manual']
-            temp_size = self[ann_id].get_template_size()[0]
-            win_size = self[ann_id].get_window_size()[0]
+            temp_size = self[ann_id].get_template_size()
+            print('temp_size',temp_size)
+            win_size = self[ann_id].get_window_size()
             if manu_ann is not None:
                 centre = manu_ann
                 cx,cy = (int(centre[0]*width),
                         int(centre[1]*height))
-                cs = int(temp_size//2) # Cross size
-                ws = int(win_size//2) # Window size
-                cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
+                cs = [int(temp_size[0]/2*width),int(temp_size[1]/2*height)] # Cross size
+                ws = [int(win_size[0]/2*width),int(win_size[1]/2*height)] # Window size
+                cv2.line(frame,(cx-cs[0],cy),(cx+cs[0],cy),
                         color=(0,255,0),thickness=1)
-                cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+                cv2.line(frame,(cx,cy-cs[1]),(cx,cy+cs[1]),
                         color=(0,255,0),thickness=1)
-                cv2.rectangle(frame,rec=(cx-ws,cy-ws,ws*2,ws*2),
+                cv2.rectangle(frame,rec=(cx-ws[0],cy-ws[1],ws[0]*2,ws[1]*2),
                         color=(0,255,0),thickness=1)
             gen_ann = ann['template_matched']
             if gen_ann is not None:
@@ -220,26 +221,10 @@ class TemplateMatchedAnnotations(DenseAnnotation):
         super().__init__()
         self.video = video.clone()
         self.annotations = manual_annotations
-        self.templates = Templates(video,manual_annotations,size=(64,64))
-        self.window_size = (128,128)
+        min_dim = min(video.width,video.height)
+        self.templates = Templates(video,manual_annotations,size=(0.05*min_dim/video.width,0.05*min_dim/video.height))
+        self.window_size = (0.1*min_dim/video.width,0.1*min_dim/video.height)
     def generate(self,starting_index):
-        # Validate data
-        if self.video is None:
-            raise Exception('Video must be provided to generate annotations.')
-        # Check if there's enough data
-        if len(self.annotations) == 0:
-            return
-        # Generate annotation for each frame
-        num_frames = self.video.frame_count
-        try:
-            for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
-                ann = self.search_frame(
-                        frame_index,
-                        window_size=self.window_size)
-                self[frame_index] = ann
-        except KeyboardInterrupt:
-            pass
-    def generate2(self,starting_index):
         # Validate data
         if self.video is None:
             raise Exception('Video must be provided to generate annotations.')
@@ -278,14 +263,15 @@ class TemplateMatchedAnnotations(DenseAnnotation):
             nearest_coord = self[frame_index-1]
 
         frame = self.video.get_frame(frame_index)
+        abs_win_size = [int(window_size[0]*width),int(window_size[1]*height)]
         if nearest_coord is not None:
-            offset_x = int(nearest_coord[0]*width-window_size[0]/2)
-            offset_y = int(nearest_coord[1]*height-window_size[1]/2)
+            offset_x = int(nearest_coord[0]*width-abs_win_size[0]/2)
+            offset_y = int(nearest_coord[1]*height-abs_win_size[1]/2)
             offset_x = max(offset_x,0)
-            offset_x = min(offset_x,width-window_size[0])
+            offset_x = min(offset_x,width-abs_win_size[0])
             offset_y = max(offset_y,0)
-            offset_y = min(offset_y,height-window_size[1])
-            window = frame[offset_y:offset_y+window_size[1],offset_x:offset_x+window_size[0],:]
+            offset_y = min(offset_y,height-abs_win_size[1])
+            window = frame[offset_y:offset_y+abs_win_size[1],offset_x:offset_x+abs_win_size[0],:]
         else:
             offset_x = 0
             offset_y = 0
