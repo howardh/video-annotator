@@ -330,7 +330,7 @@ if __name__=='__main__':
         Normalize(),
     ])
     test_transform = torchvision.transforms.Compose([
-        Scale(224),
+        Scale(int((300+224)/2)),
         CentreCrop(224),
         FilterCoords(),
         ToTensor(),
@@ -350,16 +350,16 @@ if __name__=='__main__':
 
     # Dataloaders
     train_dataloader = torch.utils.data.DataLoader(train_dataset,
-            batch_size=20, shuffle=True, drop_last=True, pin_memory=use_gpu)
-    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=16,
+            batch_size=44, shuffle=True, drop_last=True, pin_memory=use_gpu)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=44,
             shuffle=True, pin_memory=use_gpu)
 
     print('Train set size',len(train_dataset))
     print('Test set size', len(test_dataset))
 
     net = Net()
-    for p in net.seq.parameters():
-        p.requires_grad = False
+    #for p in net.seq.parameters():
+    #    p.requires_grad = False
     net.to(device)
 
     optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
