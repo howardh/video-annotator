@@ -203,6 +203,20 @@ class CentreCrop(RandomCrop):
         j = (w - tw)//2
         return i, j, th, tw
 
+class RandomHorizontalFlip(RandomCrop):
+    def __init__(self, prob=0.5):
+        self.prob = prob
+    def __call__(self, sample):
+        if np.random.rand() > self.prob:
+            return sample
+
+        output = sample.copy()
+
+        output['image'] = np.fliplr(sample['image']).copy()
+        if sample['coordinates'] is not None:
+            output['coordinates'] = (1-sample['coordinates'][0], sample['coordinates'][1])
+        return output
+
 class Normalize(object):
     def __init__(self, mean=np.array([0.485, 0.456, 0.406]), std=np.array([0.229, 0.224, 0.225])):
         self.transform = torchvision.transforms.Normalize(
@@ -324,8 +338,8 @@ if __name__=='__main__':
         Scale(300),
         RandomScale(224),
         RandomCrop(224),
-        #CentreCrop(500),
         FilterCoords(),
+        RandomHorizontalFlip(0.5),
         ToTensor(),
         Normalize(),
     ])
@@ -336,21 +350,14 @@ if __name__=='__main__':
         ToTensor(),
         Normalize(),
     ])
-    #train_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=train_transform)
-    #train_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=train_transform)
-    #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/smalldataset', transform=test_transform)
-    #test_dataset = PhotoDataset('/home/howard/Code/video-annotator/dataset', transform=test_transform)
 
     # Overfit datasets (No stochasticity)
-    train_dataset = PhotoDataset('smalldataset', transform=train_transform)
+    train_dataset = PhotoDataset('dataset', transform=train_transform)
     test_dataset = PhotoDataset('smalldataset', transform=test_transform)
-    #n=3
-    #train_dataset = torch.utils.data.Subset(train_dataset,range(n))
-    #test_dataset = torch.utils.data.Subset(test_dataset,range(n))
 
     # Dataloaders
     train_dataloader = torch.utils.data.DataLoader(train_dataset,
-            batch_size=44, shuffle=True, drop_last=True, pin_memory=use_gpu)
+            batch_size=121, shuffle=True, drop_last=True, pin_memory=use_gpu)
     test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=44,
             shuffle=True, pin_memory=use_gpu)
 
