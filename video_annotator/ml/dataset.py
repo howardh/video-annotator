@@ -381,6 +381,19 @@ if __name__=='__main__':
 
     #tqdm = lambda x: x
     for iteration in itertools.count():
+        # Save model
+        if iteration % 100:
+            with open('checkpoint.pt','wb') as f:
+                torch.save({
+                    'model': net.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'train_loss_history': train_loss_history,
+                    'test_loss_history': test_loss_history,
+                    'iteration': iteration
+                },f)
+            print('Checkpoint saved')
+
+        # Test
         test_total_loss = 0
         test_total_vis_loss = 0
         test_total_coord_loss = 0
@@ -402,6 +415,7 @@ if __name__=='__main__':
             test_total_coord_loss += coord_loss.item()/len(test_dataset)
         output_predictions('figs/test_predictions.png',x,vis_pred,coord_pred)
 
+        # Train
         total_loss = 0
         total_vis_loss = 0
         total_coord_loss = 0
