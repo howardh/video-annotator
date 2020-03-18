@@ -60,13 +60,17 @@ class VideoDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.dataset_index_mapping)
 
-    def to_photo_dataset(self):
+    def to_photo_dataset(self, size=None):
         photos_dir = os.path.join(self.dataset_dir,'photos')
         if not os.path.isdir(photos_dir):
             os.makedirs(photos_dir)
         annotations = []
         for i in tqdm(range(len(self)),desc='Creating Photo Dataset'):
             frame = self[i]['frame']
+            if size is not None:
+                height, width, _ = frame.shape
+                scale = size/min(width,height)
+                frame = cv2.resize(frame,(int(width*scale),int(height*scale)))
             ann = self[i]['annotations']
             photo_file_name = os.path.join(photos_dir,'%d.png'%i)
             cv2.imwrite(photo_file_name,frame)
@@ -323,8 +327,9 @@ def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
 
 if __name__=='__main__':
     #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
-    #d = VideoDataset('/home/howard/Code/video-annotator/dataset')
-    #d.to_photo_dataset()
+    d = VideoDataset('/home/howard/Code/video-annotator/dataset')
+    d.to_photo_dataset(size=300)
+    assert False
 
     use_gpu = torch.cuda.is_available()
     if use_gpu:
