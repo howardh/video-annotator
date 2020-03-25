@@ -6,8 +6,13 @@ from tqdm import tqdm
 from collections import defaultdict
 import logging
 
+import torch
+import torchvision
+
 import video_annotator
 from video_annotator.templatematcher import Templates
+from video_annotator.ml.model import Net
+from video_annotator.ml.transforms import Scale, CentreCrop, Normalize
 
 log = logging.getLogger(__name__)
 
@@ -16,6 +21,7 @@ class Annotations():
         self.file_path = file_path
         self.video = video
         self.annotations = {}
+        self.predicted = PredictedAnnotations(video)
 
         self.load_annotations(file_path)
 
@@ -107,6 +113,23 @@ class Annotations():
                 c0 = (int(c0[0]*width),int(c0[1]*height))
                 c1 = (int(c1[0]*width),int(c1[1]*height))
                 cv2.line(frame,c0,c1,color=(255,0,0),thickness=2)
+        pred = self.predicted[frame_index-num_frames:frame_index]
+        for c0,c1 in zip(pred,pred[1:]):
+            if c0 is None or c1 is None:
+                continue
+            c0 = (int(c0[0]*width),int(c0[1]*height))
+            c1 = (int(c1[0]*width),int(c1[1]*height))
+            cv2.line(frame,c0,c1,color=(255,0,255),thickness=20)
+        if self.predicted[frame_index] is not None:
+            centre = self.predicted[frame_index]
+            print(centre)
+            cx,cy = (int(centre[0]*width),
+                    int(centre[1]*height))
+            cs = 10 # Cross size
+            cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
+                    color=(255,0,255),thickness=1)
+            cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+                    color=(255,0,255),thickness=1)
         return frame
 
 class Annotation():
@@ -305,3 +328,70 @@ class TemplateMatchedAnnotations(DenseAnnotation):
             (top_left[0]+template_size[0]/2+offset_x)/width,
             (top_left[1]+template_size[1]/2+offset_y)/height
         )
+
+class PredictedAnnotations(DenseAnnotation):
+    def __init__(self, video):
+        super().__init__()
+        self.video = video.clone()
+        with open('checkpoint.pt','rb') as f:
+            checkpoint = torch.load(f,map_location=torch.device('cpu'))
+        self.net = Net()
+        self.net.load_state_dict(checkpoint['model'])
+        print('Model loaded')
+    def generate(self,starting_index):
+        # Validate data
+        if self.video is None:
+            raise Exception('Video must be provided to generate annotations.')
+        # Generate annotation for each frame
+        num_frames = self.video.frame_count
+        try:
+            for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
+                ann = self.search_frame(frame_index)
+                self[frame_index] = ann
+        except KeyboardInterrupt:
+            pass
+    def generate2(self,starting_index):
+        # Validate data
+        if self.video is None:
+            raise Exception('Video must be provided to generate annotations.')
+        # Generate annotation for each frame
+        num_frames = self.video.frame_count
+        funcs = []
+        def foo(i):
+            frame_index = i+starting_index
+            ann = self.search_frame(frame_index)
+            self[frame_index] = ann
+        for frame_index in tqdm(range(starting_index,num_frames),desc='Generating annotations'):
+            funcs.append(foo)
+        return funcs
+    def search_frame(self,frame_index):
+        width = self.video.width
+        height = self.video.height
+
+        frame = self.video.get_frame(frame_index)
+        # Scale
+        size = Scale.get_params(frame,int((300+224)/2))
+        frame = Scale.scale_image(size,frame)
+        # Crop
+        i,j,_,_ = CentreCrop.get_params(frame,(224,224))
+        frame = CentreCrop.crop_image((i,j), (224,224), frame)
+        # To Tensor
+        to_tensor = torchvision.transforms.ToTensor()
+        frame = to_tensor(frame)
+        # Normalize
+        normalize = Normalize()
+        frame = normalize.transform(frame)
+
+        frame = frame.view(1,3,224,224)
+
+        # Search for template in frame
+        coord,vis = self.net(frame)
+        if vis > 0.5:
+            # Rescale coordinates back to original frame
+            s1 = torch.tensor([size[0],size[1]])
+            s2 = torch.tensor([224,224])
+            coord = (coord*s2+(s1-s2)/2)/s1
+            coord = (coord[0].item(), coord[1].item())
+            return coord
+        else:
+            return None

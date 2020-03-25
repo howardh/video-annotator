@@ -18,6 +18,11 @@ import video_annotator
 from video_annotator.annotation import Annotations
 from video_annotator.video import Video
 
+from video_annotator.ml.model import Net
+from video_annotator.ml.transforms import Scale, RandomScale, RandomCrop, CentreCrop, RandomHorizontalFlip, Normalize, FilterCoords, ToTensor
+
+# Datasets
+
 class VideoDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_dir, frames_per_vid=10):
         self.dataset_dir = dataset_dir
@@ -107,190 +112,7 @@ class PhotoDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.annotations)
 
-class Scale(object):
-    def __init__(self, size):
-        self.size = size
-    @staticmethod
-    def get_params(img, size):
-        h,w,_ = img.shape
-        scale = max(size/h,size/w)
-        return int(w*scale),int(h*scale)
-    @staticmethod
-    def scale_image(size, img):
-        return img.resize(size)
-    def __call__(self, sample):
-        output = sample.copy()
-        w,h = self.get_params(output['image'],self.size)
-        output['image'] = cv2.resize(sample['image'],(w,h))
-        return output
-
-class RandomScale(object):
-    def __init__(self, min_size):
-        self.min_size = min_size
-    @staticmethod
-    def get_params(img, min_size):
-        h,w,_ = img.shape
-        mh = min_size
-        mw = min_size
-        min_scale = max(mh/h,mw/w)
-        scale = random.random()*(1-min_scale)+min_scale
-        return int(w*scale),int(h*scale)
-    @staticmethod
-    def scale_image(size, img):
-        return img.resize(size)
-    def __call__(self, sample):
-        output = sample.copy()
-        w,h = self.get_params(output['image'],self.min_size)
-        output['image'] = cv2.resize(sample['image'],(w,h))
-        return output
-
-class RandomCrop(object):
-    def __init__(self, size):
-        assert isinstance(size, (int, tuple))
-        if isinstance(size, numbers.Number):
-            self.size = (int(size), int(size))
-        else:
-            self.size = size
-    @staticmethod
-    def get_params(img, size):
-        h,w,_ = img.shape
-        th, tw = size
-        if w == tw and h == th:
-            return 0, 0, h, w
-        i = random.randint(0, h - th)
-        j = random.randint(0, w - tw)
-        return i, j, th, tw
-    @staticmethod
-    def crop_image(topleft, size, img):
-        i,j = topleft
-        th, tw = size
-        return img[i:i+th,j:j+tw,:]
-    @staticmethod
-    def crop_coordinates(topleft, size, img, coord):
-        if coord is None:
-            return None
-        h,w,_ = img.shape
-        i,j = topleft
-        th, tw = size
-        x,y = coord
-        return (
-            (w*x-j)/tw,
-            (h*y-i)/th
-        )
-    @staticmethod
-    def crop_visible(visible,annotation):
-        if not visible:
-            return False
-        x,y = annotation
-        if x < 0 or x >= 1:
-            return False
-        if y < 0 or y >= 1:
-            return False
-        return True
-    def __call__(self, sample):
-        output = sample.copy()
-
-        i,j,th,tw = self.get_params(output['image'],self.size)
-        output['image'] = self.crop_image((i,j), self.size, sample['image'])
-        output['coordinates'] = [self.crop_coordinates((i,j), self.size, sample['image'], c) for c in sample['coordinates']]
-        output['visible'] = any([self.crop_visible(sample['visible'],c) for c in output['coordinates']])
-        return output
-
-class CentreCrop(RandomCrop):
-    @staticmethod
-    def get_params(img, size):
-        h,w,_ = img.shape
-        th, tw = size
-        if w == tw and h == th:
-            return 0, 0, h, w
-        i = (h - th)//2
-        j = (w - tw)//2
-        return i, j, th, tw
-
-class RandomHorizontalFlip(RandomCrop):
-    def __init__(self, prob=0.5):
-        self.prob = prob
-    def __call__(self, sample):
-        if np.random.rand() > self.prob:
-            return sample
-
-        output = sample.copy()
-
-        output['image'] = np.fliplr(sample['image']).copy()
-        if sample['coordinates'] is not None:
-            output['coordinates'] = (1-sample['coordinates'][0], sample['coordinates'][1])
-        return output
-
-class Normalize(object):
-    def __init__(self, mean=np.array([0.485, 0.456, 0.406]), std=np.array([0.229, 0.224, 0.225])):
-        self.transform = torchvision.transforms.Normalize(
-                mean=mean,
-                std=std,
-                inplace=False
-        )
-    def __call__(self, sample):
-        output = sample.copy()
-        output['image'] = self.transform(sample['image'])
-        return output
-
-class FilterCoords(object):
-    def __call__(self, sample):
-        coord = None
-        for c in sample['coordinates']:
-            if c is None:
-                continue
-            if c[0] < 0 or c[0] > 1 or c[1] < 0 or c[1] > 1:
-                continue
-            coord = c
-            break
-        output = sample.copy()
-        output['coordinates'] = coord
-        output['visible'] = coord is not None
-        return output
-
-class ToTensor(object):
-    def __init__(self):
-        self.transform = torchvision.transforms.ToTensor()
-    def __call__(self, sample):
-        output = sample.copy()
-        output['image'] = self.transform(sample['image'])
-        if sample['coordinates'] is None:
-            output['coordinates'] = torch.zeros([2])
-        else:
-            output['coordinates'] = torch.tensor(sample['coordinates'])
-        output['visible'] = torch.tensor(sample['visible'])
-        return output
-
-class Net(torch.nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.base = torchvision.models.resnet18(pretrained=True)
-        self.seq = torch.nn.Sequential(
-            self.base.conv1,
-            self.base.bn1,
-            self.base.relu,
-            self.base.maxpool,
-            self.base.layer1,
-            self.base.layer2,
-            self.base.layer3,
-            self.base.layer4,
-            self.base.avgpool
-        )
-        self.classifier = torch.nn.Sequential(
-            torch.nn.Linear(in_features=512,out_features=256),
-            torch.nn.Linear(in_features=256,out_features=1)
-        )
-        self.coordinate = torch.nn.Sequential(
-            torch.nn.Linear(in_features=512,out_features=256),
-            torch.nn.Linear(in_features=256,out_features=2),
-            torch.nn.Sigmoid()
-        )
-    def forward(self,x):
-        x = self.seq(x)
-        x = x.squeeze()
-        visible = self.classifier(x)
-        coord = self.coordinate(x)
-        return coord, visible
+# Utils
 
 def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
     mean = np.array([0.485, 0.456, 0.406])
@@ -325,12 +147,9 @@ def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
     # Save image
     cv2.imwrite(file_name,output)
 
-if __name__=='__main__':
-    #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
-    d = VideoDataset('/home/howard/Code/video-annotator/dataset')
-    d.to_photo_dataset(size=300)
-    assert False
+####################################################################################################
 
+def train():
     use_gpu = torch.cuda.is_available()
     if use_gpu:
         print('GPU found')
@@ -477,3 +296,14 @@ if __name__=='__main__':
         plt.legend(loc='best')
         plt.savefig('figs/log-plot.png')
         plt.close()
+
+def make_datasets():
+    #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
+    d = VideoDataset('/home/howard/Code/video-annotator/dataset')
+    d.to_photo_dataset(size=300)
+
+if __name__=='__main__':
+    with open('checkpoint2.pt','rb') as f:
+        checkpoint = torch.load(f,map_location=torch.device('cpu'))
+    net = Net()
+    net.load_state_dict(checkpoint['model'])

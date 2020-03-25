@@ -127,6 +127,10 @@ class State:
         funcs = self.annotations[self.annotation_id].template_matched.generate2(
                 self.current_frame_index)
         self.launch_bg_task(funcs)
+    def generate_annotations_cnn(self):
+        funcs = self.annotations.predicted.generate2(
+                self.current_frame_index)
+        self.launch_bg_task(funcs)
 
     def prev_annotation(self):
         ann_ids = sorted(self.annotations.annotations.keys())
@@ -256,7 +260,7 @@ class State:
         cropped_frame = frame[top:top+zh,left:left+zw,:]
         frame = cv2.resize(cropped_frame,(w,h))
         return frame
-    
+
     def add_annotation(self,annotation):
         if annotation is not None:
             z = self.zoom

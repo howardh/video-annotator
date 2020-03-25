@@ -41,6 +41,7 @@ class App:
         self.window.bind('<KeyPress>', self.handle_key_press)
 
         self.window.bind('g', lambda e: self.state.generate_annotations())
+        self.window.bind('G', lambda e: self.state.generate_annotations_cnn())
         self.window.bind('k', lambda e: self.state.kill_current_bg_task())
 
         self.canvas.bind('<Button-1>', self.handle_mouse_down)
@@ -88,6 +89,8 @@ class App:
         edit_menu.add_separator()
         edit_menu.add_command(label="Generate Annotation Path",
                 command=self.state.generate_annotations)
+        edit_menu.add_command(label="Generate Annotation Path (CNN)",
+                command=self.state.generate_annotations_cnn)
         edit_menu.add_separator()
         edit_menu.add_command(label="Increase Window Size",
                 command=self.state.inc_window_size)
