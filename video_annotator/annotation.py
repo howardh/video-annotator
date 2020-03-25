@@ -119,7 +119,7 @@ class Annotations():
                 continue
             c0 = (int(c0[0]*width),int(c0[1]*height))
             c1 = (int(c1[0]*width),int(c1[1]*height))
-            cv2.line(frame,c0,c1,color=(255,0,255),thickness=20)
+            cv2.line(frame,c0,c1,color=(255,0,255),thickness=2)
         if self.predicted[frame_index] is not None:
             centre = self.predicted[frame_index]
             print(centre)

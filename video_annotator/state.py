@@ -4,7 +4,7 @@ from tqdm import tqdm
 import time
 
 class BackgroundTask(threading.Thread):
-    def __init__(self,funcs,progress_callbacks=[],
+    def __init__(self,funcs,cleanup=None,progress_callbacks=[],
             done_callback=lambda s: None):
         super().__init__()
         self.funcs = funcs
@@ -13,6 +13,7 @@ class BackgroundTask(threading.Thread):
         self.i = None
         self.t = time.process_time()
         self.kill_flag = False
+        self.cleanup = cleanup
     def run(self):
         for self.i,func in tqdm(enumerate(self.funcs)):
             func(self.i)
@@ -23,6 +24,8 @@ class BackgroundTask(threading.Thread):
                 self.t = t
             if self.kill_flag:
                 break
+        if self.cleanup is not None:
+            self.cleanup()
         self.done_callback(self)
     def kill(self):
         self.kill_flag = True
@@ -57,14 +60,14 @@ class State:
     def call_callbacks(self, key):
         for f in self.callbacks[key]:
             f()
-    def launch_bg_task(self, funcs):
+    def launch_bg_task(self, funcs, cleanup=None):
         def done_callback(task):
             print('done',task)
             self.background_tasks.remove(task)
             if len(self.background_tasks) > 0:
                 self.background_tasks[0].start()
             self.call_callbacks('background')
-        task = BackgroundTask(funcs,self.callbacks['background'],done_callback)
+        task = BackgroundTask(funcs,cleanup,self.callbacks['background'],done_callback)
         self.background_tasks.append(task)
         if len(self.background_tasks) == 1:
             task.start()
@@ -260,6 +263,24 @@ class State:
         cropped_frame = frame[top:top+zh,left:left+zw,:]
         frame = cv2.resize(cropped_frame,(w,h))
         return frame
+    
+    def save_video(self, file_name, start_frame=None, end_frame=None):
+        if start_frame is None:
+            start_frame = self.current_frame_index
+        if end_frame is None:
+            end_frame = self.video.frame_count
+        print('Saving video to',file_name)
+
+        fourcc = cv2.VideoWriter_fourcc(*'XVID')
+        output = cv2.VideoWriter(file_name, fourcc, self.video.fps, (self.video.width,self.video.height))
+        def save_frame(index):
+            frame = self.video.get_frame(index)
+            frame = self.annotations.render(frame, index)
+            output.write(frame)
+        def cleanup():
+            output.release()
+            print('output file released')
+        self.launch_bg_task([lambda i: save_frame(i+start_frame) for _ in range(end_frame-start_frame)],cleanup=cleanup)
 
     def add_annotation(self,annotation):
         if annotation is not None:

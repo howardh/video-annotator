@@ -1,4 +1,5 @@
 import tkinter
+from tkinter import filedialog
 import cv2
 import PIL
 import PIL.Image, PIL.ImageTk
@@ -74,6 +75,8 @@ class App:
         file_menu = tkinter.Menu(menu_bar, tearoff=0)
         file_menu.add_command(label="Open", command=lambda: None)
         file_menu.add_command(label="Save", command=self.state.save)
+        file_menu.add_separator()
+        file_menu.add_command(label="Save Video", command=lambda: self.state.save_video(tkinter.filedialog.asksaveasfilename()))
         file_menu.add_separator()
         file_menu.add_command(label="Exit", command=self.quit)
         menu_bar.add_cascade(label="File", menu=file_menu)
