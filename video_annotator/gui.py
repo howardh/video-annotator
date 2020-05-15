@@ -92,6 +92,8 @@ class App:
         edit_menu.add_separator()
         edit_menu.add_command(label="Generate Annotation Path",
                 command=self.state.generate_annotations)
+        edit_menu.add_command(label="Generate Annotation Path (Optical Flow)",
+                command=self.state.generate_annotations_optical_flow)
         edit_menu.add_command(label="Generate Annotation Path (CNN)",
                 command=self.state.generate_annotations_cnn)
         edit_menu.add_separator()

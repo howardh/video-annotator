@@ -130,6 +130,10 @@ class State:
         funcs = self.annotations[self.annotation_id].template_matched.generate2(
                 self.current_frame_index)
         self.launch_bg_task(funcs)
+    def generate_annotations_optical_flow(self):
+        funcs = self.annotations[self.annotation_id].optical_flow.generate2(
+                self.current_frame_index)
+        self.launch_bg_task(funcs)
     def generate_annotations_cnn(self):
         funcs = self.annotations.predicted.generate2(
                 self.current_frame_index)
