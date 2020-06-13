@@ -130,7 +130,7 @@ def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
         img = img.copy()
         w,h,_ = img.shape
         # Draw ground truth
-        if x['visible'][i] > 0.5:
+        if 'visible' in x and x['visible'][i] > 0.5:
             cx,cy = (x['coordinates'][i].cpu()*torch.tensor([w,h])).long()
             cv2.line(img,(cx-5,cy),(cx+5,cy),(255,0,0))
             cv2.line(img,(cx,cy-5),(cx,cy+5),(255,0,0))
@@ -207,7 +207,7 @@ def train():
     for iteration in itertools.count():
         # Save model
         if iteration % 100:
-            with open('checkpoint.pt','wb') as f:
+            with open('checkpoints/checkpoint-%d.pt'%iteration,'wb') as f:
                 torch.save({
                     'model': net.state_dict(),
                     'optimizer': optimizer.state_dict(),

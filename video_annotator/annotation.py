@@ -402,7 +402,7 @@ class PredictedAnnotations(DenseAnnotation):
     def __init__(self, video):
         super().__init__()
         self.video = video.clone()
-        with open('checkpoint.pt','rb') as f:
+        with open('checkpoint2.pt','rb') as f:
             checkpoint = torch.load(f,map_location=torch.device('cpu'))
         self.net = Net()
         self.net.load_state_dict(checkpoint['model'])
