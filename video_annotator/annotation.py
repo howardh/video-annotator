@@ -13,8 +13,9 @@ import torchvision
 
 import video_annotator
 from video_annotator.templatematcher import Templates
-from video_annotator.ml.model import Net
+from video_annotator.ml.model import Net, Net2
 from video_annotator.ml.transforms import Scale, CentreCrop, Normalize
+from video_annotator.ml.utils import parse_anchor_boxes
 
 log = logging.getLogger(__name__)
 
@@ -24,6 +25,7 @@ class Annotations():
         self.video = video
         self.annotations = {}
         self.predicted = PredictedAnnotations(video)
+        self.predicted2 = PredictedAnnotations2(video)
 
         self.load_annotations(file_path)
     def __getitem__(self, annotation_id):
@@ -140,6 +142,8 @@ class Annotations():
                     color=(255,0,255),thickness=1)
             cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
                     color=(255,0,255),thickness=1)
+        # Predicted annotation 2
+        self.predicted2.render(frame, frame_index, (255,255,255))
         return frame
 
 class Annotation():
@@ -399,12 +403,12 @@ class OpticalFlowAnnotations(DenseAnnotation):
         return tuple(p.squeeze().tolist())
 
 class PredictedAnnotations(DenseAnnotation):
-    def __init__(self, video):
+    def __init__(self, video, model=Net, checkpoint='checkpoints/checkpoint-2000.pt'):
         super().__init__()
         self.video = video.clone()
-        with open('checkpoints/checkpoint-2000.pt','rb') as f:
+        with open(checkpoint,'rb') as f:
             checkpoint = torch.load(f,map_location=torch.device('cpu'))
-        self.net = Net()
+        self.net = model()
         self.net.load_state_dict(checkpoint['model'])
         self.net.eval()
         print('Model loaded')
@@ -465,3 +469,53 @@ class PredictedAnnotations(DenseAnnotation):
             return coord
         else:
             return None
+
+class PredictedAnnotations2(PredictedAnnotations):
+    def __init__(self, video, model=Net2, checkpoint='checkpoints/checkpoint2-801.pt'):
+        super().__init__(video, model, checkpoint)
+    def search_frame(self,frame_index):
+        width = self.video.width
+        height = self.video.height
+
+        frame = self.video.get_frame(frame_index)
+        # Scale
+        size = Scale.get_params(frame,int((300+224)/2))
+        frame = Scale.scale_image(size,frame)
+        # Crop
+        i,j,_,_ = CentreCrop.get_params(frame,(224,224))
+        frame = CentreCrop.crop_image((i,j), (224,224), frame)
+        # To Tensor
+        to_tensor = torchvision.transforms.ToTensor()
+        frame = to_tensor(frame)
+        # Normalize
+        normalize = Normalize()
+        frame = normalize.transform(frame)
+
+        frame = frame.view(1,3,224,224)
+
+        # Search for template in frame
+        output = []
+        coord,vis = self.net(frame)
+        for p in parse_anchor_boxes(coord[0],vis[0]):
+            if p['vis'] < 0.5:
+                continue
+            # Rescale coordinates back to original frame
+            s1 = torch.tensor([size[0],size[1]])
+            s2 = torch.tensor([224,224])
+            coord = (p['coord']*s2+(s1-s2)/2)/s1
+            coord = (p['coord'][0].item(), p['coord'][1].item())
+            output.append(coord)
+        return output
+    def render(self, frame, frame_index, colour, cross_size=10):
+        if frame_index >= len(self):
+            return
+
+        height,width,_ = frame.shape
+        for centre in self.data[frame_index]:
+            cx,cy = (int(centre[0]*width),
+                    int(centre[1]*height))
+            cs = int(cross_size//2) # Cross size
+            cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
+                    color=colour,thickness=1)
+            cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+                    color=colour,thickness=1)

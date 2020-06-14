@@ -20,6 +20,7 @@ from video_annotator.video import Video
 
 from video_annotator.ml.model import Net, Net2
 from video_annotator.ml.transforms import Scale, RandomScale, RandomCrop, CentreCrop, RandomHorizontalFlip, Normalize, FilterCoords, ToTensor, ToTensorAnchorBox
+from video_annotator.ml.utils import parse_anchor_boxes
 
 # Datasets
 
@@ -158,29 +159,21 @@ def output_predictions_anchor_box(file_name,x,vis_pred,coord_pred,n=5):
 
     output = []
     indices = [int((x['image'].shape[0]-1)/n*i) for i in range(n)]
-    boxes = torch.tensor(coord_pred.shape[-2:]) # Number of anchor boxes in each dimension
+    #boxes = torch.tensor(coord_pred.shape[-2:]) # Number of anchor boxes in each dimension
     def render_keypoints(img, vis, coord, colour=(0,0,0), render_confidence=True):
         w,h,_ = img.shape
-        box_dims = 1/boxes.float()
-        for box in itertools.product(range(boxes[0]),range(boxes[1])):
-            # Anchor box indices
-            box = torch.tensor(box)
-            # Visibility
-            v = vis[0,box[0],box[1]]
-            if v < 0.5:
+        for p in parse_anchor_boxes(coord, vis):
+            # Check visibility
+            if p['vis'] < 0.5:
                 continue
-            # Coordinate relative to the upper-left corner of anchor box
-            rel_coord = coord[:,box[0],box[1]]
-            # Absolute coordinate in [0,1]^2
-            abs_coord = (box+rel_coord)*box_dims
             # Compute coordinate in pixels
-            cx,cy = (abs_coord*torch.tensor([w,h])).long()
+            cx,cy = (p['coord']*torch.tensor([w,h])).long()
             # Draw
             cv2.line(img,(cx-5,cy),(cx+5,cy),colour)
             cv2.line(img,(cx,cy-5),(cx,cy+5),colour)
             # Confidence
             if render_confidence:
-                cv2.putText(img, '%.2f'%torch.sigmoid(v), (cx,cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour)
+                cv2.putText(img, '%.2f'%p['vis'], (cx,cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour)
         return img
     for i in indices:
         img = unnormalize(x['image'][i]).permute(1,2,0).numpy()*255

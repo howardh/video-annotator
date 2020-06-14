@@ -96,6 +96,8 @@ class App:
                 command=self.state.generate_annotations_optical_flow)
         edit_menu.add_command(label="Generate Annotation Path (CNN)",
                 command=self.state.generate_annotations_cnn)
+        edit_menu.add_command(label="Generate Annotation Path (CNN2)",
+                command=self.state.generate_annotations_cnn2)
         edit_menu.add_separator()
         edit_menu.add_command(label="Increase Window Size",
                 command=self.state.inc_window_size)
