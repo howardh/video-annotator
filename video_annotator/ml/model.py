@@ -27,7 +27,7 @@ class Net(torch.nn.Module):
         )
     def forward(self,x):
         x = self.seq(x)
-        x = x.squeeze()
+        x = x.view(x.shape[:2])
         visible = self.classifier(x)
         coord = self.coordinate(x)
         return coord, visible

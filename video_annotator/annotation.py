@@ -402,10 +402,11 @@ class PredictedAnnotations(DenseAnnotation):
     def __init__(self, video):
         super().__init__()
         self.video = video.clone()
-        with open('checkpoint2.pt','rb') as f:
+        with open('checkpoints/checkpoint-2000.pt','rb') as f:
             checkpoint = torch.load(f,map_location=torch.device('cpu'))
         self.net = Net()
         self.net.load_state_dict(checkpoint['model'])
+        self.net.eval()
         print('Model loaded')
     def generate(self,starting_index):
         # Validate data
@@ -460,7 +461,7 @@ class PredictedAnnotations(DenseAnnotation):
             s1 = torch.tensor([size[0],size[1]])
             s2 = torch.tensor([224,224])
             coord = (coord*s2+(s1-s2)/2)/s1
-            coord = (coord[0].item(), coord[1].item())
+            coord = (coord[0][0].item(), coord[0][1].item())
             return coord
         else:
             return None
