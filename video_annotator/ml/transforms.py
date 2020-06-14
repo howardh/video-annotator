@@ -1,4 +1,6 @@
 import numpy as np
+import random
+import numbers
 import cv2
 import torch
 import torchvision
@@ -111,10 +113,8 @@ class RandomHorizontalFlip(RandomCrop):
             return sample
 
         output = sample.copy()
-
         output['image'] = np.fliplr(sample['image']).copy()
-        if sample['coordinates'] is not None:
-            output['coordinates'] = (1-sample['coordinates'][0], sample['coordinates'][1])
+        output['coordinates'] = [(1-c[0],c[1]) for c in sample['coordinates']]
         return output
 
 class Normalize(object):
@@ -133,10 +133,13 @@ class FilterCoords(object):
     def __call__(self, sample):
         coord = None
         for c in sample['coordinates']:
+            # Check of annotation exists
             if c is None:
                 continue
+            # Check if out of bounds
             if c[0] < 0 or c[0] > 1 or c[1] < 0 or c[1] > 1:
                 continue
+            # Return first keypoint that is visible
             coord = c
             break
         output = sample.copy()
@@ -155,4 +158,35 @@ class ToTensor(object):
         else:
             output['coordinates'] = torch.tensor(sample['coordinates'])
         output['visible'] = torch.tensor(sample['visible'])
+        return output
+
+class ToTensorAnchorBox(object):
+    """ Convert to Tensors with coordinates in anchor box format. """
+    def __init__(self, divs=[7,7]):
+        self.transform = torchvision.transforms.ToTensor()
+        self.divs = divs
+    def __call__(self, sample):
+        coords = torch.zeros([2]+self.divs)
+        vis = torch.zeros([1]+self.divs)
+        d = torch.tensor(self.divs)
+        for c in sample['coordinates']:
+            # Check if visible
+            if c is None:
+                continue
+            if c[0] < 0 or c[0] > 1 or c[1] < 0 or c[1] > 1:
+                continue
+            # Compute which anchor box it belongs to
+            c = torch.tensor(c)
+            discrete_coord = torch.min((c*d).long(),d-1) # If c==1, then it goes out of bounds. Use max to fix that.
+            # Check if another keypoint was already found in this anchor box
+            if vis[0,discrete_coord[0],discrete_coord[1]]:
+                continue
+            vis[0,discrete_coord[0],discrete_coord[1]] = 1
+            # Compute coordinate relative to top-left of anchor box
+            coords[:,discrete_coord[0],discrete_coord[1]] = c*d-discrete_coord
+
+        output = sample.copy()
+        output['image'] = self.transform(sample['image'])
+        output['coordinates'] = coords
+        output['visible'] = vis
         return output

@@ -18,8 +18,8 @@ import video_annotator
 from video_annotator.annotation import Annotations
 from video_annotator.video import Video
 
-from video_annotator.ml.model import Net
-from video_annotator.ml.transforms import Scale, RandomScale, RandomCrop, CentreCrop, RandomHorizontalFlip, Normalize, FilterCoords, ToTensor
+from video_annotator.ml.model import Net, Net2
+from video_annotator.ml.transforms import Scale, RandomScale, RandomCrop, CentreCrop, RandomHorizontalFlip, Normalize, FilterCoords, ToTensor, ToTensorAnchorBox
 
 # Datasets
 
@@ -147,6 +147,55 @@ def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
     # Save image
     cv2.imwrite(file_name,output)
 
+def output_predictions_anchor_box(file_name,x,vis_pred,coord_pred,n=5):
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    unnormalize = torchvision.transforms.Normalize(
+            mean=-mean/std,
+            std=1/std,
+            inplace=False
+    )
+
+    output = []
+    indices = [int((x['image'].shape[0]-1)/n*i) for i in range(n)]
+    boxes = torch.tensor(coord_pred.shape[-2:]) # Number of anchor boxes in each dimension
+    def render_keypoints(img, vis, coord, colour=(0,0,0), render_confidence=True):
+        w,h,_ = img.shape
+        box_dims = 1/boxes.float()
+        for box in itertools.product(range(boxes[0]),range(boxes[1])):
+            # Anchor box indices
+            box = torch.tensor(box)
+            # Visibility
+            v = vis[0,box[0],box[1]]
+            if v < 0.5:
+                continue
+            # Coordinate relative to the upper-left corner of anchor box
+            rel_coord = coord[:,box[0],box[1]]
+            # Absolute coordinate in [0,1]^2
+            abs_coord = (box+rel_coord)*box_dims
+            # Compute coordinate in pixels
+            cx,cy = (abs_coord*torch.tensor([w,h])).long()
+            # Draw
+            cv2.line(img,(cx-5,cy),(cx+5,cy),colour)
+            cv2.line(img,(cx,cy-5),(cx,cy+5),colour)
+            # Confidence
+            if render_confidence:
+                cv2.putText(img, '%.2f'%torch.sigmoid(v), (cx,cy), cv2.FONT_HERSHEY_SIMPLEX, 0.5, colour)
+        return img
+    for i in indices:
+        img = unnormalize(x['image'][i]).permute(1,2,0).numpy()*255
+        img = img.copy()
+        # Draw predictions
+        img = render_keypoints(img, vis_pred[i], coord_pred[i], (0,255,0), render_confidence=True)
+        # Draw ground truth
+        img = render_keypoints(img, x['visible'][i], x['coordinates'][i], (255,0,0), render_confidence=False)
+        # Add to output
+        output.append(img)
+    # Concatenate outputs
+    output = np.concatenate(output,axis=1)
+    # Save image
+    cv2.imwrite(file_name,output)
+
 ####################################################################################################
 
 def train():
@@ -162,8 +211,8 @@ def train():
         Scale(300),
         RandomScale(224),
         RandomCrop(224),
-        FilterCoords(),
         RandomHorizontalFlip(0.5),
+        FilterCoords(),
         ToTensor(),
         Normalize(),
     ])
@@ -297,13 +346,165 @@ def train():
         plt.savefig('figs/log-plot.png')
         plt.close()
 
+def train_anchor_box():
+    use_gpu = torch.cuda.is_available()
+    if use_gpu:
+        print('GPU found')
+        device = torch.device('cuda')
+    else:
+        print('No GPU found')
+        device = torch.device('cpu')
+
+    train_transform = torchvision.transforms.Compose([
+        Scale(300),
+        RandomScale(224),
+        RandomCrop(224),
+        RandomHorizontalFlip(0.5),
+        ToTensorAnchorBox(),
+        Normalize(),
+    ])
+    test_transform = torchvision.transforms.Compose([
+        Scale(int((300+224)/2)),
+        CentreCrop(224),
+        ToTensorAnchorBox(),
+        Normalize(),
+    ])
+
+    # Overfit datasets (No stochasticity)
+    train_dataset = PhotoDataset('dataset', transform=train_transform)
+    test_dataset = PhotoDataset('smalldataset', transform=test_transform)
+
+    # Dataloaders
+    train_dataloader = torch.utils.data.DataLoader(train_dataset,
+            batch_size=121, shuffle=True, drop_last=True, pin_memory=use_gpu)
+    test_dataloader = torch.utils.data.DataLoader(test_dataset, batch_size=44,
+            shuffle=True, pin_memory=use_gpu)
+
+    print('Train set size',len(train_dataset))
+    print('Test set size', len(test_dataset))
+
+    net = Net2()
+    #for p in net.seq.parameters():
+    #    p.requires_grad = False
+    net.to(device)
+
+    optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
+
+    vis_criterion = torch.nn.BCEWithLogitsLoss(reduction='none')
+    coord_criterion = torch.nn.MSELoss(reduce=False)
+    train_loss_history = []
+    test_loss_history = []
+
+    vw=1
+    cw=1
+
+    #tqdm = lambda x: x
+    for iteration in itertools.count():
+        # Save model
+        if iteration % 100:
+            with open('checkpoints/checkpoint2-%d.pt'%iteration,'wb') as f:
+                torch.save({
+                    'model': net.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'train_loss_history': train_loss_history,
+                    'test_loss_history': test_loss_history,
+                    'iteration': iteration
+                },f)
+            print('Checkpoint saved')
+
+        # Test
+        test_total_loss = 0
+        test_total_vis_loss = 0
+        test_total_coord_loss = 0
+        net.eval()
+        for x in tqdm(test_dataloader):
+            # Ground truth
+            vis = x['visible'].float().to(device)
+            coord = x['coordinates'].to(device)
+            # Prediction
+            coord_pred,vis_pred = net(x['image'].to(device))
+            # Loss for each component
+            vis_loss = vis_criterion(vis_pred,vis).sum()
+            coord_loss = coord_criterion(coord_pred,coord)
+            coord_loss = (coord_loss*vis).sum()
+            # Weight losses
+            vis_loss = vw*vis_loss
+            coord_loss = cw*coord_loss
+            # Overall loss
+            loss = vis_loss + coord_loss
+            # Sum losses
+            test_total_loss += loss.item()/len(test_dataset)
+            test_total_vis_loss += vis_loss.item()/len(test_dataset)
+            test_total_coord_loss += coord_loss.item()/len(test_dataset)
+        output_predictions_anchor_box('figs/test_predictions.png',x,vis_pred,coord_pred)
+
+        # Train
+        total_loss = 0
+        total_vis_loss = 0
+        total_coord_loss = 0
+        net.train()
+        visible_count = 0
+        batch_count = 0
+        for x in tqdm(train_dataloader):
+            # Ground truth
+            vis = x['visible'].float().to(device)
+            coord = x['coordinates'].to(device)
+            # Prediction
+            coord_pred,vis_pred = net(x['image'].to(device))
+            # Loss for each component
+            vis_loss = vis_criterion(vis_pred,vis).sum()
+            coord_loss = coord_criterion(coord_pred,coord)
+            coord_loss = (coord_loss*vis).sum()
+            # Weight losses
+            vis_loss = vw*vis_loss
+            coord_loss = cw*coord_loss
+            # Overall loss
+            loss = vis_loss + coord_loss
+            # Sum losses
+            total_loss += loss.item()/len(test_dataset)
+            total_vis_loss += vis_loss.item()/len(test_dataset)
+            total_coord_loss += coord_loss.item()/len(test_dataset)
+
+            visible_count += vis.sum()
+            batch_count += vis.shape[0]*vis.shape[1]*vis.shape[2]*vis.shape[3]
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+        output_predictions_anchor_box('figs/train_predictions.png',x,vis_pred,coord_pred)
+        print('Iteration',iteration)
+        print('Test',test_total_loss, test_total_vis_loss, test_total_coord_loss)
+        print('Train',total_loss, total_vis_loss, total_coord_loss)
+        print('Vis',visible_count/batch_count)
+        train_loss_history.append(total_loss)
+        test_loss_history.append(test_total_loss)
+
+        plt.plot(range(len(train_loss_history)), train_loss_history,label='Training Loss')
+        plt.plot(range(len(test_loss_history)), test_loss_history,label='Testing Loss')
+        plt.xlabel('# Iterations')
+        plt.ylabel('Loss')
+        plt.grid()
+        plt.legend(loc='best')
+        plt.savefig('figs/plot.png')
+        plt.close()
+
+        plt.plot(range(len(train_loss_history)), [np.log(x) for x in train_loss_history],label='Training Loss')
+        plt.plot(range(len(test_loss_history)), [np.log(x) for x in test_loss_history],label='Testing Loss')
+        plt.xlabel('# Iterations')
+        plt.ylabel('Log Loss')
+        plt.grid()
+        plt.legend(loc='best')
+        plt.savefig('figs/log-plot.png')
+        plt.close()
+
 def make_datasets():
     #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
     d = VideoDataset('/home/howard/Code/video-annotator/dataset')
     d.to_photo_dataset(size=300)
 
 if __name__=='__main__':
-    with open('checkpoint2.pt','rb') as f:
-        checkpoint = torch.load(f,map_location=torch.device('cpu'))
-    net = Net()
-    net.load_state_dict(checkpoint['model'])
+    #with open('checkpoint2.pt','rb') as f:
+    #    checkpoint = torch.load(f,map_location=torch.device('cpu'))
+    #net = Net()
+    #net.load_state_dict(checkpoint['model'])
+    train_anchor_box()
