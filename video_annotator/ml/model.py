@@ -49,8 +49,7 @@ class Net2(torch.nn.Module):
         )
         self.classifier = torch.nn.Sequential(
             torch.nn.Linear(in_features=512,out_features=256),
-            torch.nn.Linear(in_features=256,out_features=7*7),
-            torch.nn.Sigmoid()
+            torch.nn.Linear(in_features=256,out_features=7*7)
         )
         self.coordinate = torch.nn.Sequential(
             torch.nn.Linear(in_features=512,out_features=256),

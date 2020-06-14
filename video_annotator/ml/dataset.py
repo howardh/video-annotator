@@ -159,7 +159,6 @@ def output_predictions_anchor_box(file_name,x,vis_pred,coord_pred,n=5):
 
     output = []
     indices = [int((x['image'].shape[0]-1)/n*i) for i in range(n)]
-    #boxes = torch.tensor(coord_pred.shape[-2:]) # Number of anchor boxes in each dimension
     def render_keypoints(img, vis, coord, colour=(0,0,0), render_confidence=True):
         w,h,_ = img.shape
         for p in parse_anchor_boxes(coord, vis):

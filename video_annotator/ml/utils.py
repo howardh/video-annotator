@@ -17,7 +17,7 @@ def parse_anchor_boxes(coord, vis):
         # Anchor box indices
         box = torch.tensor(box)
         # Visibility
-        v = vis[0,box[0],box[1]]
+        v = torch.sigmoid(vis[0,box[0],box[1]])
         # Coordinate relative to the upper-left corner of anchor box
         rel_coord = coord[:,box[0],box[1]]
         # Absolute coordinate in [0,1]^2
