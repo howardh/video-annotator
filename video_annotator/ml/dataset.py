@@ -255,7 +255,7 @@ def train():
     #tqdm = lambda x: x
     for iteration in itertools.count():
         # Save model
-        if iteration % 100:
+        if iteration % 100 == 0:
             with open('checkpoints/checkpoint-%d.pt'%iteration,'wb') as f:
                 torch.save({
                     'model': net.state_dict(),
