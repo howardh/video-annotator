@@ -393,7 +393,7 @@ def train_anchor_box():
     #tqdm = lambda x: x
     for iteration in itertools.count():
         # Save model
-        if iteration % 100:
+        if iteration % 100 == 0:
             with open('checkpoints/checkpoint2-%d.pt'%iteration,'wb') as f:
                 torch.save({
                     'model': net.state_dict(),
