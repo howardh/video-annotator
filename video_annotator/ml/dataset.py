@@ -159,9 +159,9 @@ def output_predictions_anchor_box(file_name,x,vis_pred,coord_pred,n=5):
 
     output = []
     indices = [int((x['image'].shape[0]-1)/n*i) for i in range(n)]
-    def render_keypoints(img, vis, coord, colour=(0,0,0), render_confidence=True):
+    def render_keypoints(img, vis, coord, colour=(0,0,0), render_confidence=True, is_truth=False):
         w,h,_ = img.shape
-        for p in parse_anchor_boxes(coord, vis):
+        for p in parse_anchor_boxes(coord, vis, normalized_vis=is_truth):
             # Check visibility
             if p['vis'] < 0.5:
                 continue
@@ -178,9 +178,11 @@ def output_predictions_anchor_box(file_name,x,vis_pred,coord_pred,n=5):
         img = unnormalize(x['image'][i]).permute(1,2,0).numpy()*255
         img = img.copy()
         # Draw predictions
-        img = render_keypoints(img, vis_pred[i], coord_pred[i], (0,255,0), render_confidence=True)
+        img = render_keypoints(
+                img, vis_pred[i], coord_pred[i], (0,255,0), render_confidence=True, is_truth=False)
         # Draw ground truth
-        img = render_keypoints(img, x['visible'][i], x['coordinates'][i], (255,0,0), render_confidence=False)
+        img = render_keypoints(
+                img, x['visible'][i], x['coordinates'][i], (255,0,0), render_confidence=False, is_truth=True)
         # Add to output
         output.append(img)
     # Concatenate outputs

@@ -1,7 +1,7 @@
 import itertools
 import torch
 
-def parse_anchor_boxes(coord, vis):
+def parse_anchor_boxes(coord, vis, normalized_vis=False):
     """ Parse a tensor representing anchor box outputs, and
     return a list of coordinates with visibility prediction for that point
     """
@@ -17,7 +17,10 @@ def parse_anchor_boxes(coord, vis):
         # Anchor box indices
         box = torch.tensor(box)
         # Visibility
-        v = torch.sigmoid(vis[0,box[0],box[1]])
+        if normalized_vis:
+            v = vis[0,box[0],box[1]]
+        else:
+            v = torch.sigmoid(vis[0,box[0],box[1]])
         # Coordinate relative to the upper-left corner of anchor box
         rel_coord = coord[:,box[0],box[1]]
         # Absolute coordinate in [0,1]^2
