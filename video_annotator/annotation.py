@@ -471,7 +471,7 @@ class PredictedAnnotations(DenseAnnotation):
             return None
 
 class PredictedAnnotations2(PredictedAnnotations):
-    def __init__(self, video, model=Net2, checkpoint='checkpoints/checkpoint2-801.pt'):
+    def __init__(self, video, model=Net2, checkpoint='checkpoints/checkpoint2-5500.pt'):
         super().__init__(video, model, checkpoint)
     def search_frame(self,frame_index):
         width = self.video.width
@@ -500,10 +500,10 @@ class PredictedAnnotations2(PredictedAnnotations):
             if p['vis'] < 0.5:
                 continue
             # Rescale coordinates back to original frame
-            s1 = torch.tensor([size[0],size[1]])
-            s2 = torch.tensor([224,224])
+            s1 = torch.tensor([size[0],size[1]]) # Frame size after resizing
+            s2 = torch.tensor([224,224]) # Frame size after cropping
             coord = (p['coord']*s2+(s1-s2)/2)/s1
-            coord = (p['coord'][0].item(), p['coord'][1].item())
+            coord = (coord[0].item(), coord[1].item())
             output.append(coord)
         return output
     def render(self, frame, frame_index, colour, cross_size=10):
@@ -516,6 +516,6 @@ class PredictedAnnotations2(PredictedAnnotations):
                     int(centre[1]*height))
             cs = int(cross_size//2) # Cross size
             cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
-                    color=colour,thickness=1)
+                    color=colour,thickness=5)
             cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
-                    color=colour,thickness=1)
+                    color=colour,thickness=5)

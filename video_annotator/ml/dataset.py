@@ -181,8 +181,9 @@ def output_predictions_anchor_box(file_name,x,vis_pred,coord_pred,n=5):
         img = render_keypoints(
                 img, vis_pred[i], coord_pred[i], (0,255,0), render_confidence=True, is_truth=False)
         # Draw ground truth
-        img = render_keypoints(
-                img, x['visible'][i], x['coordinates'][i], (255,0,0), render_confidence=False, is_truth=True)
+        if 'visible' in x and 'coordinates' in x:
+            img = render_keypoints(
+                    img, x['visible'][i], x['coordinates'][i], (255,0,0), render_confidence=False, is_truth=True)
         # Add to output
         output.append(img)
     # Concatenate outputs
