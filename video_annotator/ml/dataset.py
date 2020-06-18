@@ -5,6 +5,7 @@ import random
 import numbers
 import itertools
 import numpy as np
+import math
 
 import matplotlib
 matplotlib.use('Agg')
@@ -22,7 +23,9 @@ from video_annotator.ml.model import Net, Net2
 from video_annotator.ml.transforms import Scale, RandomScale, RandomCrop, CentreCrop, RandomHorizontalFlip, Normalize, FilterCoords, ToTensor, ToTensorAnchorBox
 from video_annotator.ml.utils import parse_anchor_boxes
 
+####################################################################################################
 # Datasets
+####################################################################################################
 
 class VideoDataset(torch.utils.data.Dataset):
     def __init__(self, dataset_dir, frames_per_vid=10):
@@ -113,7 +116,132 @@ class PhotoDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.annotations)
 
+class MovementDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset_dir):
+        filename = 'movement.pkl'
+        filepath = os.path.join(dataset_dir,filename)
+        if os.path.isfile(filepath):
+            print('Loading from file')
+            self.load(filepath)
+        else:
+            self.create_from_video_dataset(dataset_dir)
+            self.save(filepath)
+
+    def create_from_video_dataset(self, dataset_dir):
+        self.dataset_dir = dataset_dir
+        self.videos_dir = os.path.join(dataset_dir,'videos')
+        self.annotations_dir = os.path.join(dataset_dir,'annotations')
+
+        self.data = []
+        coords = []
+        for annotations in self.get_all_annotations():
+            for ann in annotations.annotations.values():
+                for x in tqdm(ann.template_matched.data):
+                    if x is None:
+                        coords = []
+                        continue
+                    coords.append(torch.tensor(x))
+                    if len(coords) > 3:
+                        coords = coords[-3:]
+
+                    if len(coords) < 2:
+                        diff = torch.tensor([0,0])
+                    else:
+                        diff = coords[-1]-coords[-2]
+
+                    if len(coords) < 3:
+                        prev_diff = torch.tensor([0,0])
+                    else:
+                        prev_diff = coords[-2]-coords[-3]
+
+                    self.data.append((prev_diff.float(), diff.float()))
+
+    def get_all_annotations(self):
+        video_file_names = [
+                f for f in os.listdir(self.videos_dir) if os.path.isfile(os.path.join(self.videos_dir, f))]
+        for video_file_name in video_file_names:
+            video = Video(os.path.join(self.videos_dir,video_file_name))
+            ann_file_name = video_file_name.split('.')[0]+'.pkl'
+            ann_file_path = os.path.join(self.annotations_dir,ann_file_name)
+            yield Annotations(ann_file_path,video)
+
+    def filter(self):
+        def f(x):
+            x0,x1 = x
+            l0 = (x0*x0).sum()
+            l1 = (x1*x1).sum()
+            return l0 > 0 and l1/l0 < 2
+        self.data = [d for d in tqdm(self.data,desc='filtering') if f(d)]
+
+    def get_normalized(self, index):
+        x0,x1 = self.data[index]
+        x0 = x0.float()
+        x1 = x1.float()
+        n = torch.tensor([1,0]).float() # Normed vector
+
+        l = (x0*x0).sum()
+        if l > 0:
+            s = -(n[1]*x0[0]-x0[1]*n[0])/l
+            c = x0.dot(n)/l # Dividing without sqrt combines the scaling here
+            t = torch.tensor([[c,s],[-s,c]])
+            output = t@x1
+            if (output*output).sum() > 3:
+                return n
+            return t@x1
+        else:
+            return n # TODO: Maybe I should get rid of this data?
+            l = (x1*x1).sum().sqrt()
+            return x1/l
+
+    def __getitem__(self,index):
+        x0,x1 = self.data[index]
+        x0 = x0.float()
+        x1 = x1.float()
+        n = torch.tensor([1,0]).float() # Normed vector
+
+        l = (x0*x0).sum()
+        if l > 0:
+            s = -(n[1]*x0[0]-x0[1]*n[0])/l
+            c = x0.dot(n)/l # Dividing without sqrt combines the scaling here
+            t = torch.tensor([[c,s],[-s,c]])
+            return t@x1
+        else:
+            return n # TODO: Maybe I should get rid of this data?
+            l = (x1*x1).sum().sqrt()
+            return x1/l
+
+    def __len__(self):
+        return len(self.data)
+
+    def save(self, filename):
+        with open(filename,'wb') as f:
+            pickle.dump(self.data, f)
+
+    def load(self, filename):
+        with open(filename,'rb') as f:
+            self.data = pickle.load(f)
+
+    def plot(self, filename='plot.png'):
+        import matplotlib
+        from matplotlib import pyplot as plt
+        def cart2pol(x, y):
+            rho = np.sqrt(x**2 + y**2)
+            phi = np.arctan2(y, x)
+            return(rho, phi)
+
+        data = [self[i] for i in range(len(self))]
+        x = [x.item() for x,y in data]
+        y = [y.item() for x,y in data]
+        plt.scatter(x,y,alpha=0.01)
+        plt.grid(which='both')
+        plt.ylim(-3,3)
+        plt.xlim(-3,3)
+        plt.savefig(filename)
+        plt.close()
+
+####################################################################################################
 # Utils
+####################################################################################################
 
 def output_predictions(file_name,x,vis_pred,coord_pred,n=5):
     mean = np.array([0.485, 0.456, 0.406])
@@ -492,6 +620,12 @@ def train_anchor_box():
         plt.savefig('figs/log-plot.png')
         plt.close()
 
+def train_gmm():
+    dataset_dir = '/home/howard/Code/video-annotator/dataset'
+    d = MovementDataset(dataset_dir)
+
+    # TODO: EM with GMM?
+
 def make_datasets():
     #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
     d = VideoDataset('/home/howard/Code/video-annotator/dataset')
@@ -502,4 +636,93 @@ if __name__=='__main__':
     #    checkpoint = torch.load(f,map_location=torch.device('cpu'))
     #net = Net()
     #net.load_state_dict(checkpoint['model'])
-    train_anchor_box()
+
+    #train_anchor_box()
+
+    checkpoint_dir = './checkpoints'
+    iterations = 100
+
+    class Gaussian:
+        def __init__(self):
+            #self.mean = torch.tensor([[0,0]]).float()
+            self.mean = (torch.rand([1,2])-0.5)*3
+            #self.std = torch.tensor([[1,0],[0,1]]).float()*0.01
+            self.std = torch.tensor([1,1]).float()*0.01
+            self.mean.requires_grad = True
+            self.std.requires_grad = True
+        def __call__(self, x):
+            """
+            1/(2\pi) * det(s)^{1/2} exp( (-1/2) (x-m)^T s^{-1} (x-m) )
+            """
+            m = self.mean
+            s = self.std.diag()
+
+            a = 1/(2*math.pi)
+            b = s.det().sqrt() 
+            c = torch.exp( -1/2 * (x-m) @ s.inverse() @ (x-m).permute(0,2,1))
+            return a*b*c
+        def parameters(self):
+            return [self.mean, self.std]
+        def state_dict(self):
+            return {
+                    'mean': self.mean,
+                    'std': self.std
+            }
+        def __repr__(self):
+            return '<Gaussian mean=%s std=%s>' % (self.mean, self.std)
+        def __str__(self):
+            return '<Gaussian mean=%s std=%s>' % (self.mean, self.std)
+
+    class GaussianMixtureModel:
+        def __init__(self, n):
+            self.gaussians = [Gaussian() for _ in range(n)]
+            self.weights = torch.rand([n])
+            self.weights.requires_grad = True
+        def __call__(self, x):
+            g_output = torch.cat([g(x) for g in self.gaussians],dim=2)
+            w = self.weights
+            w = torch.exp(w)
+            w = w/w.sum()
+            return (w*g_output).sum(dim=2)
+        def parameters(self):
+            for g in self.gaussians:
+                for p in g.parameters():
+                    yield p
+            yield self.weights
+        def state_dict(self):
+            return {
+                'weights': self.weights,
+                'gaussians': [g.state_dict() for g in self.gaussians]
+            }
+        def __repr__(self):
+            return '<GaussianMixtureModel weights=%s gaussians=%s>' % (self.weights, self.gaussians)
+        def __str__(self):
+            return '<GaussianMixtureModel weights=%s gaussians=%s>' % (self.weights, self.gaussians)
+
+    def plot_gaussian(gaussian,r,d, filename):
+        data = torch.zeros([d+1,d+1])
+        for x0,x1 in itertools.product(range(d+1),range(d+1)):
+            x = (torch.tensor([[[x0,x1]]]).float()/d-.5)*r*2
+            data[x0,x1] = g(x).item()
+        import matplotlib
+        #matplotlib.use('TkAgg')
+        from matplotlib import pyplot as plt
+        plt.imshow(data.t().numpy())
+        #plt.show()
+        plt.savefig(filename)
+        plt.close()
+
+    #g = GaussianMixtureModel(2)
+    g = Gaussian()
+
+    dataset_dir = '/home/howard/Code/video-annotator/dataset'
+    dataset = MovementDataset(dataset_dir)
+    #dataset.filter()
+
+    d = [dataset[i] for i in tqdm(range(len(dataset)))]
+    d = torch.stack(d)
+    g.mean[0,:] = d.mean(0)
+    g.std[:] = d.std(0)
+
+    print(g)
+    plot_gaussian(g,3,100,'./figs/prior-%02d.png' % i)

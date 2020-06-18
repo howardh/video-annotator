@@ -12,6 +12,7 @@ class Video(object):
         self.fps = self.cap.get(cv2.CAP_PROP_FPS)
         self.width = int(self.cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.height = int(self.cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        print('Opening file:',video_file_path)
         print('Number of frames:', self.frame_count)
         print('Frames per second:', self.fps)
         print('Frame width:', self.width)
