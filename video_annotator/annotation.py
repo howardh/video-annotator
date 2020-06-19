@@ -473,6 +473,21 @@ class PredictedAnnotations(DenseAnnotation):
 class PredictedAnnotations2(PredictedAnnotations):
     def __init__(self, video, model=Net2, checkpoint='checkpoints/checkpoint2-5500.pt'):
         super().__init__(video, model, checkpoint)
+        self.mapping = [None]*video.frame_count
+    def map_path(self):
+        """ Compute the path of a keypoint. """
+        for i in tqdm(range(1,len(self.data)), desc='Computing Mapping'):
+            prev = self.data[i-1]
+            curr = self.data[i]
+            self.mapping[i] = [None]*len(curr)
+            score = [[None]*len(curr) for _ in range(len(prev))]
+            for pi,p in enumerate(prev):
+                p = np.array(p)
+                for ci,c in enumerate(curr):
+                    c = np.array(c)
+                    score[pi][ci] = np.exp(-((c-p)**2).sum())
+            score = np.array(score)
+            self.mapping[i] = [score[:,ci].argmax() for ci in range(len(curr))]
     def search_frame(self,frame_index):
         width = self.video.width
         height = self.video.height
@@ -511,7 +526,7 @@ class PredictedAnnotations2(PredictedAnnotations):
             return
 
         height,width,_ = frame.shape
-        for centre in self.data[frame_index]:
+        for ci,centre in enumerate(self.data[frame_index]):
             cx,cy = (int(centre[0]*width),
                     int(centre[1]*height))
             cs = int(cross_size//2) # Cross size
@@ -519,3 +534,22 @@ class PredictedAnnotations2(PredictedAnnotations):
                     color=colour,thickness=5)
             cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
                     color=colour,thickness=5)
+
+            # Draw Path
+            path_len = 100
+            i1 = None
+            i0 = ci
+            for path_index in range(path_len):
+                if frame_index-path_index-1 < 0:
+                    break
+                if frame_index >= len(self.mapping):
+                    break
+                i1 = i0
+                i0 = self.mapping[frame_index-path_index][i1]
+                c1 = self.data[frame_index-path_index][i1]
+                c0 = self.data[frame_index-path_index-1][i0]
+                if c0 is None or c1 is None:
+                    break
+                c0 = (int(c0[0]*width),int(c0[1]*height))
+                c1 = (int(c1[0]*width),int(c1[1]*height))
+                cv2.line(frame,c0,c1,color=colour,thickness=2)

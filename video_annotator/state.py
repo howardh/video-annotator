@@ -141,7 +141,7 @@ class State:
     def generate_annotations_cnn2(self):
         funcs = self.annotations.predicted2.generate2(
                 self.current_frame_index)
-        self.launch_bg_task(funcs)
+        self.launch_bg_task(funcs, cleanup=self.annotations.predicted2.map_path)
 
     def prev_annotation(self):
         ann_ids = sorted(self.annotations.annotations.keys())
