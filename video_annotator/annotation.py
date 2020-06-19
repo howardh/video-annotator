@@ -123,25 +123,26 @@ class Annotations():
                         color=(0,255,0),thickness=10)
                 cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
                         color=(0,255,0),thickness=10)
-        # Predicted annotation path
-        pred = self.predicted[frame_index-num_frames:frame_index]
-        for c0,c1 in zip(pred,pred[1:]):
-            if c0 is None or c1 is None:
-                continue
-            c0 = (int(c0[0]*width),int(c0[1]*height))
-            c1 = (int(c1[0]*width),int(c1[1]*height))
-            cv2.line(frame,c0,c1,color=(255,0,255),thickness=2)
-        # Predicted annotation
-        if self.predicted[frame_index] is not None:
-            centre = self.predicted[frame_index]
-            print(centre)
-            cx,cy = (int(centre[0]*width),
-                    int(centre[1]*height))
-            cs = 10 # Cross size
-            cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
-                    color=(255,0,255),thickness=1)
-            cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
-                    color=(255,0,255),thickness=1)
+        ## Predicted annotation path
+        #pred = self.predicted[frame_index-num_frames:frame_index]
+        #for c0,c1 in zip(pred,pred[1:]):
+        #    if c0 is None or c1 is None:
+        #        continue
+        #    c0 = (int(c0[0]*width),int(c0[1]*height))
+        #    c1 = (int(c1[0]*width),int(c1[1]*height))
+        #    cv2.line(frame,c0,c1,color=(255,0,255),thickness=2)
+        ## Predicted annotation
+        #if self.predicted[frame_index] is not None:
+        #    centre = self.predicted[frame_index]
+        #    print(centre)
+        #    cx,cy = (int(centre[0]*width),
+        #            int(centre[1]*height))
+        #    cs = 10 # Cross size
+        #    cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
+        #            color=(255,0,255),thickness=1)
+        #    cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+        #            color=(255,0,255),thickness=1)
+        self.predicted.render(frame, frame_index, (255,0,255))
         # Predicted annotation 2
         self.predicted2.render(frame, frame_index, (255,255,255))
         return frame
@@ -469,6 +470,30 @@ class PredictedAnnotations(DenseAnnotation):
             return coord
         else:
             return None
+    def render(self, frame, frame_index, colour, cross_size=10, path_len=100):
+        if frame_index >= len(self):
+            return
+
+        height,width,_ = frame.shape
+
+        # Annotation path
+        pred = self[frame_index-path_len:frame_index]
+        for c0,c1 in zip(pred,pred[1:]):
+            if c0 is None or c1 is None:
+                continue
+            c0 = (int(c0[0]*width),int(c0[1]*height))
+            c1 = (int(c1[0]*width),int(c1[1]*height))
+            cv2.line(frame,c0,c1,color=colour,thickness=2)
+        # Annotation Keypoint
+        if self[frame_index] is not None:
+            centre = self[frame_index]
+            cx,cy = (int(centre[0]*width),
+                    int(centre[1]*height))
+            cs = cross_size
+            cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
+                    color=colour,thickness=1)
+            cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
+                    color=colour,thickness=1)
 
 class PredictedAnnotations2(PredictedAnnotations):
     def __init__(self, video, model=Net2, checkpoint='checkpoints/checkpoint2-5500.pt'):
@@ -521,7 +546,7 @@ class PredictedAnnotations2(PredictedAnnotations):
             coord = (coord[0].item(), coord[1].item())
             output.append(coord)
         return output
-    def render(self, frame, frame_index, colour, cross_size=10):
+    def render(self, frame, frame_index, colour, cross_size=10, path_len=100):
         if frame_index >= len(self):
             return
 
@@ -536,7 +561,6 @@ class PredictedAnnotations2(PredictedAnnotations):
                     color=colour,thickness=5)
 
             # Draw Path
-            path_len = 100
             i1 = None
             i0 = ci
             for path_index in range(path_len):
