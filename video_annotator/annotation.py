@@ -477,10 +477,17 @@ class PredictedAnnotations(DenseAnnotation):
             cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
                     color=colour,thickness=1)
 
-def map_annotations(prev,curr,threshold=np.exp(-0.01)):
+def map_annotations(prev,curr,threshold=0.01):
+    """
+    Args:
+        prev: A list of keypoint coordinates in the preceeding frame
+        curr: A list of keypoint coordinates in the current frame
+        threshold: The maximum distance (squared and normalize in [0,1]) between a keypoint on
+            two consecutive frames.
+    """
     if len(curr) == 0 or len(prev) == 0:
         return [None]*len(curr)
-
+    threshold=np.exp(-threshold)
     score = [[None]*len(curr) for _ in range(len(prev))]
     for pi,p in enumerate(prev):
         p = np.array(p)
