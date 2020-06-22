@@ -14,7 +14,7 @@ import torchvision
 import video_annotator
 from video_annotator.templatematcher import Templates
 from video_annotator.ml.model import Net, Net2
-from video_annotator.ml.transforms import Scale, CentreCrop, Normalize
+from video_annotator.ml.transforms import Scale, RandomCrop, CentreCrop, Normalize
 from video_annotator.ml.utils import parse_anchor_boxes
 
 log = logging.getLogger(__name__)
@@ -123,27 +123,9 @@ class Annotations():
                         color=(0,255,0),thickness=10)
                 cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
                         color=(0,255,0),thickness=10)
-        ## Predicted annotation path
-        #pred = self.predicted[frame_index-num_frames:frame_index]
-        #for c0,c1 in zip(pred,pred[1:]):
-        #    if c0 is None or c1 is None:
-        #        continue
-        #    c0 = (int(c0[0]*width),int(c0[1]*height))
-        #    c1 = (int(c1[0]*width),int(c1[1]*height))
-        #    cv2.line(frame,c0,c1,color=(255,0,255),thickness=2)
-        ## Predicted annotation
-        #if self.predicted[frame_index] is not None:
-        #    centre = self.predicted[frame_index]
-        #    print(centre)
-        #    cx,cy = (int(centre[0]*width),
-        #            int(centre[1]*height))
-        #    cs = 10 # Cross size
-        #    cv2.line(frame,(cx-cs,cy),(cx+cs,cy),
-        #            color=(255,0,255),thickness=1)
-        #    cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
-        #            color=(255,0,255),thickness=1)
+        # CNN Prediction
         self.predicted.render(frame, frame_index, (255,0,255))
-        # Predicted annotation 2
+        # CNN Prediction with anchor boxes
         self.predicted2.render(frame, frame_index, (255,255,255))
         return frame
 
@@ -495,35 +477,88 @@ class PredictedAnnotations(DenseAnnotation):
             cv2.line(frame,(cx,cy-cs),(cx,cy+cs),
                     color=colour,thickness=1)
 
+def map_annotations(prev,curr,threshold=np.exp(-0.01)):
+    if len(curr) == 0 or len(prev) == 0:
+        return [None]*len(curr)
+
+    score = [[None]*len(curr) for _ in range(len(prev))]
+    for pi,p in enumerate(prev):
+        p = np.array(p)
+        for ci,c in enumerate(curr):
+            c = np.array(c)
+            score[pi][ci] = np.exp(-((c-p)**2).sum())
+    score = np.array(score)
+    mapping = [None]*len(curr)
+    for _ in range(len(curr)):
+        m = score.max()
+        if m < threshold:
+            break
+        pi,ci = np.where(score == m)
+        mapping[ci[0]] = pi[0]
+        score[:,ci[0]] = 0
+        score[pi[0],:] = 0
+    return mapping
+
 class PredictedAnnotations2(PredictedAnnotations):
     def __init__(self, video, model=Net2, checkpoint='checkpoints/checkpoint2-5500.pt'):
         super().__init__(video, model, checkpoint)
         self.mapping = [None]*video.frame_count
+    def postprocess(self):
+        self.map_path()
+        self.smooth_path()
     def map_path(self):
         """ Compute the path of a keypoint. """
         for i in tqdm(range(1,len(self.data)), desc='Computing Mapping'):
             prev = self.data[i-1]
             curr = self.data[i]
-            self.mapping[i] = [None]*len(curr)
-            score = [[None]*len(curr) for _ in range(len(prev))]
-            for pi,p in enumerate(prev):
-                p = np.array(p)
-                for ci,c in enumerate(curr):
-                    c = np.array(c)
-                    score[pi][ci] = np.exp(-((c-p)**2).sum())
-            score = np.array(score)
-            self.mapping[i] = [score[:,ci].argmax() for ci in range(len(curr))]
-    def search_frame(self,frame_index):
+            self.mapping[i] = map_annotations(prev,curr)
+    def smooth_path(self):
+        output = [self.data[0]]
+        zipped_data = [
+            self.data,
+            self.data[1:],
+            self.data[2:],
+            self.mapping,
+            self.mapping[1:],
+            self.mapping[2:]
+        ]
+        for c0,c1,c2,m0,m1,m2 in zip(*zipped_data):
+            smoothed = []
+            for i1,c in enumerate(c1):
+                # Prev point
+                i0 = m1[i1]
+                if i0 is None:
+                    smoothed.append(c)
+                    continue
+                # Next point
+                if i1 not in m2:
+                    smoothed.append(c)
+                    continue
+                i2 = m2.index(i1)
+                # Coords
+                prev_c = np.array(c0[i0])
+                next_c = np.array(c2[i2])
+                c = np.array(c)
+                # Average
+                smoothed.append((prev_c+next_c+c)/3)
+            output.append(smoothed)
+        output.append(self.data[-1])
+        self.data = output
+    def search_frame_1(self,frame_index):
         width = self.video.width
         height = self.video.height
 
         frame = self.video.get_frame(frame_index)
+        # Params
+        scale_size = int((300+224)/2)
+        crop_size = (224,224)
         # Scale
-        size = Scale.get_params(frame,int((300+224)/2))
+        size = Scale.get_params(frame,scale_size)
         frame = Scale.scale_image(size,frame)
         # Crop
-        i,j,_,_ = CentreCrop.get_params(frame,(224,224))
-        frame = CentreCrop.crop_image((i,j), (224,224), frame)
+        i,j,_,_ = RandomCrop.get_params(frame, crop_size)
+        frame = CentreCrop.crop_image((i,j), crop_size, frame)
+        crop_top_left = (j,i)
         # To Tensor
         to_tensor = torchvision.transforms.ToTensor()
         frame = to_tensor(frame)
@@ -541,11 +576,29 @@ class PredictedAnnotations2(PredictedAnnotations):
                 continue
             # Rescale coordinates back to original frame
             s1 = torch.tensor([size[0],size[1]]) # Frame size after resizing
-            s2 = torch.tensor([224,224]) # Frame size after cropping
-            coord = (p['coord']*s2+(s1-s2)/2)/s1
+            s2 = torch.tensor(crop_size) # Frame size after cropping
+            tl = torch.tensor(crop_top_left) # Top-left coordinate of cropped window relative to original frame
+            coord = (p['coord']*s2+tl)/s1
             coord = (coord[0].item(), coord[1].item())
             output.append(coord)
         return output
+    def search_frame(self,frame_index):
+        threshold = 0.01
+        results = [self.search_frame_1(frame_index) for _ in range(5)]
+        groupings = []
+        for coords in results:
+            if len(groupings) == 0:
+                for c in coords:
+                    groupings.append([c])
+            means = [np.mean(g,axis=0) for g in groupings]
+            for c in coords:
+                dist_from_means = ((means-np.array(c))**2).sum(axis=1)
+                if dist_from_means.min() > threshold:
+                    groupings.append([c])
+                else:
+                    groupings[dist_from_means.argmin()].append(c)
+        means = [np.mean(g,axis=0) for g in groupings]
+        return means
     def render(self, frame, frame_index, colour, cross_size=10, path_len=100):
         if frame_index >= len(self):
             return
@@ -570,6 +623,8 @@ class PredictedAnnotations2(PredictedAnnotations):
                     break
                 i1 = i0
                 i0 = self.mapping[frame_index-path_index][i1]
+                if i0 is None or i1 is None:
+                    break
                 c1 = self.data[frame_index-path_index][i1]
                 c0 = self.data[frame_index-path_index-1][i0]
                 if c0 is None or c1 is None:
