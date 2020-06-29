@@ -1,5 +1,6 @@
 import tkinter
 from tkinter import filedialog
+from tkinter import messagebox
 import cv2
 import PIL
 import PIL.Image, PIL.ImageTk
@@ -62,12 +63,14 @@ class App:
         self.window.mainloop()
 
     def update_title(self):
-        if len(self.state.background_tasks) == 0:
-            self.window.title('Video Annotator')
-        else:
+        title = 'Video Annotator'
+        if self.state.dirty:
+            title += '*'
+        if len(self.state.background_tasks) > 0:
             current_task = self.state.background_tasks[0]
             progress = current_task.i/len(current_task)*100
-            self.window.title('Video Annotator (%.1f%%)' % progress)
+            title += (' (%.1f%%)' % progress)
+        self.window.title(title)
 
     def create_menu(self):
         menu_bar = tkinter.Menu(self.window)
@@ -196,6 +199,10 @@ class App:
         self.state.toggle_pause()
 
     def quit(self):
+        if self.state.dirty:
+            response = messagebox.askyesnocancel(title='Save work',message='Unsaved work. Exit anyway?')
+            if not response:
+                return
         self.window.destroy()
 
     def render_current_frame(self):
