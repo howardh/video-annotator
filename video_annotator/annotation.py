@@ -484,6 +484,11 @@ def map_annotations(prev,curr,threshold=0.01):
         curr: A list of keypoint coordinates in the current frame
         threshold: The maximum distance (squared and normalize in [0,1]) between a keypoint on
             two consecutive frames.
+    Returns:
+        A list of indices with the same length as `curr`, mapping each keypoint to
+        its corresponding keypoint in the previous frame.
+
+        If there is no matching keypoint in the previous frame, the value for that keypoint mapping will be None.
     """
     if len(curr) == 0 or len(prev) == 0:
         return [None]*len(curr)

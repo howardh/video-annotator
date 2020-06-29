@@ -642,87 +642,59 @@ if __name__=='__main__':
     checkpoint_dir = './checkpoints'
     iterations = 100
 
-    class Gaussian:
-        def __init__(self):
-            #self.mean = torch.tensor([[0,0]]).float()
-            self.mean = (torch.rand([1,2])-0.5)*3
-            #self.std = torch.tensor([[1,0],[0,1]]).float()*0.01
-            self.std = torch.tensor([1,1]).float()*0.01
-            self.mean.requires_grad = True
-            self.std.requires_grad = True
-        def __call__(self, x):
-            """
-            1/(2\pi) * det(s)^{1/2} exp( (-1/2) (x-m)^T s^{-1} (x-m) )
-            """
-            m = self.mean
-            s = self.std.diag()
-
-            a = 1/(2*math.pi)
-            b = s.det().sqrt() 
-            c = torch.exp( -1/2 * (x-m) @ s.inverse() @ (x-m).permute(0,2,1))
-            return a*b*c
-        def parameters(self):
-            return [self.mean, self.std]
-        def state_dict(self):
-            return {
-                    'mean': self.mean,
-                    'std': self.std
-            }
-        def __repr__(self):
-            return '<Gaussian mean=%s std=%s>' % (self.mean, self.std)
-        def __str__(self):
-            return '<Gaussian mean=%s std=%s>' % (self.mean, self.std)
-
-    class GaussianMixtureModel:
-        def __init__(self, n):
-            self.gaussians = [Gaussian() for _ in range(n)]
-            self.weights = torch.rand([n])
-            self.weights.requires_grad = True
-        def __call__(self, x):
-            g_output = torch.cat([g(x) for g in self.gaussians],dim=2)
-            w = self.weights
-            w = torch.exp(w)
-            w = w/w.sum()
-            return (w*g_output).sum(dim=2)
-        def parameters(self):
-            for g in self.gaussians:
-                for p in g.parameters():
-                    yield p
-            yield self.weights
-        def state_dict(self):
-            return {
-                'weights': self.weights,
-                'gaussians': [g.state_dict() for g in self.gaussians]
-            }
-        def __repr__(self):
-            return '<GaussianMixtureModel weights=%s gaussians=%s>' % (self.weights, self.gaussians)
-        def __str__(self):
-            return '<GaussianMixtureModel weights=%s gaussians=%s>' % (self.weights, self.gaussians)
+    import sklearn
+    import sklearn.mixture
 
     def plot_gaussian(gaussian,r,d, filename):
         data = torch.zeros([d+1,d+1])
         for x0,x1 in itertools.product(range(d+1),range(d+1)):
-            x = (torch.tensor([[[x0,x1]]]).float()/d-.5)*r*2
-            data[x0,x1] = g(x).item()
+            x = (np.array([[x0,x1]],dtype=np.float)/d-.5)*r*2
+            data[x0,x1] = g.score(x)
         import matplotlib
-        #matplotlib.use('TkAgg')
+        matplotlib.use('TkAgg')
         from matplotlib import pyplot as plt
         plt.imshow(data.t().numpy())
-        #plt.show()
+        plt.show()
         plt.savefig(filename)
         plt.close()
 
-    #g = GaussianMixtureModel(2)
-    g = Gaussian()
+    from matplotlib.colors import LogNorm
+    def plot_contour(clf, x_range=[-3.,3.], y_range=[-3.,3.],n=100,filename='contour.png'):
+        import matplotlib
+        matplotlib.use('TkAgg')
+        from matplotlib import pyplot as plt
+
+        # display predicted scores by the model as a contour plot
+        x = np.linspace(*x_range,n)
+        y = np.linspace(*y_range,n)
+        X, Y = np.meshgrid(x, y)
+        XX = np.array([X.ravel(), Y.ravel()]).T
+        Z = -clf.score_samples(XX)
+        Z = Z.reshape(X.shape)
+
+        CS = plt.contour(X, Y, Z)
+        #CS = plt.contour(X, Y, Z, norm=LogNorm(vmin=1.0, vmax=1000.0),
+        #                 levels=np.logspace(-7, 6, 10))
+        CB = plt.colorbar(CS, shrink=0.8, extend='both')
+        #plt.scatter(X_train[:, 0], X_train[:, 1], .8)
+
+        plt.title('Negative log-likelihood predicted by a GMM')
+        plt.axis('tight')
+        plt.savefig(filename)
+        plt.show()
+        plt.close()
 
     dataset_dir = '/home/howard/Code/video-annotator/dataset'
     dataset = MovementDataset(dataset_dir)
-    #dataset.filter()
+    dataset.filter()
 
     d = [dataset[i] for i in tqdm(range(len(dataset)))]
-    d = torch.stack(d)
-    g.mean[0,:] = d.mean(0)
-    g.std[:] = d.std(0)
+    d = torch.stack(d).numpy()
+    print('fitting...')
+
+    g = sklearn.mixture.GaussianMixture(10)
+    g.fit(d)
 
     print(g)
-    plot_gaussian(g,3,100,'./figs/prior-%02d.png' % i)
+    #plot_gaussian(g,3,100,'./figs/prior.png')
+    plot_contour(g, [-3,3],[-3,3],n=1000)
