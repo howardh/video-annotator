@@ -620,28 +620,12 @@ def train_anchor_box():
         plt.savefig('figs/log-plot.png')
         plt.close()
 
-def train_gmm():
-    dataset_dir = '/home/howard/Code/video-annotator/dataset'
-    d = MovementDataset(dataset_dir)
-
-    # TODO: EM with GMM?
-
 def make_datasets():
     #d = VideoDataset('/home/howard/Code/video-annotator/smalldataset')
     d = VideoDataset('/home/howard/Code/video-annotator/dataset')
     d.to_photo_dataset(size=300)
 
-if __name__=='__main__':
-    #with open('checkpoint2.pt','rb') as f:
-    #    checkpoint = torch.load(f,map_location=torch.device('cpu'))
-    #net = Net()
-    #net.load_state_dict(checkpoint['model'])
-
-    #train_anchor_box()
-
-    checkpoint_dir = './checkpoints'
-    iterations = 100
-
+def plot_gmm():
     import sklearn
     import sklearn.mixture
 
@@ -698,3 +682,15 @@ if __name__=='__main__':
     print(g)
     #plot_gaussian(g,3,100,'./figs/prior.png')
     plot_contour(g, [-3,3],[-3,3],n=1000)
+
+if __name__=='__main__':
+    #with open('checkpoint2.pt','rb') as f:
+    #    checkpoint = torch.load(f,map_location=torch.device('cpu'))
+    #net = Net()
+    #net.load_state_dict(checkpoint['model'])
+
+    #train_anchor_box()
+
+    checkpoint_dir = './checkpoints'
+    iterations = 100
+

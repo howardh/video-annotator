@@ -386,7 +386,7 @@ class OpticalFlowAnnotations(DenseAnnotation):
         return tuple(p.squeeze().tolist())
 
 class PredictedAnnotations(DenseAnnotation):
-    def __init__(self, video, model=Net, checkpoint='checkpoints/checkpoint-2000.pt'):
+    def __init__(self, video, model=Net, checkpoint='checkpoints/saved/checkpoint-2000.pt'):
         super().__init__()
         self.video = video.clone()
         with open(checkpoint,'rb') as f:
@@ -512,7 +512,8 @@ def map_annotations(prev,curr,threshold=0.01):
     return mapping
 
 class PredictedAnnotations2(PredictedAnnotations):
-    def __init__(self, video, model=Net2, checkpoint='checkpoints/checkpoint2-5500.pt'):
+    #def __init__(self, video, model=Net2, checkpoint='checkpoints/saved/checkpoint2-5500.pt'):
+    def __init__(self, video, model=Net2, checkpoint='./checkpoint2-5000.pt'):
         super().__init__(video, model, checkpoint)
         self.mapping = [None]*video.frame_count
     def postprocess(self):
@@ -633,8 +634,11 @@ class PredictedAnnotations2(PredictedAnnotations):
                     break
                 if frame_index >= len(self.mapping):
                     break
+                m0 = self.mapping[frame_index-path_index]
+                if m0 is None:
+                    break
                 i1 = i0
-                i0 = self.mapping[frame_index-path_index][i1]
+                i0 = m0[i1]
                 if i0 is None or i1 is None:
                     break
                 c1 = self.data[frame_index-path_index][i1]
