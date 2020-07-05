@@ -16,6 +16,7 @@ from video_annotator.templatematcher import Templates
 from video_annotator.ml.model import Net, Net2
 from video_annotator.ml.transforms import Scale, RandomCrop, CentreCrop, Normalize
 from video_annotator.ml.utils import parse_anchor_boxes
+from video_annotator.ml.u2net.model import U2NET, U2NETP
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +27,7 @@ class Annotations():
         self.annotations = {}
         self.predicted = PredictedAnnotations(video)
         self.predicted2 = PredictedAnnotations2(video)
+        self.salience = SalienceAnnotation(None, self.predicted2)
 
         self.load_annotations(file_path)
     def __getitem__(self, annotation_id):
@@ -73,7 +75,8 @@ class Annotations():
         with open(annotation_file_path, 'wb') as f:
             pickle.dump(output, f)
         print('saving to', annotation_file_path)
-    def render(self, frame, frame_index, num_frames=100):
+    def render(self, frame, frame_index, num_frames=100, render_salience=False):
+        print(render_salience)
         height,width,_ = frame.shape
         for ann_id in self.annotations.keys():
             ann = self[ann_id][frame_index]
@@ -127,6 +130,10 @@ class Annotations():
         self.predicted.render(frame, frame_index, (255,0,255))
         # CNN Prediction with anchor boxes
         self.predicted2.render(frame, frame_index, (255,255,255))
+        # Salience
+        if render_salience:
+            self.salience.render(frame, frame_index)
+
         return frame
 
 class Annotation():
@@ -648,3 +655,56 @@ class PredictedAnnotations2(PredictedAnnotations):
                 c0 = (int(c0[0]*width),int(c0[1]*height))
                 c1 = (int(c1[0]*width),int(c1[1]*height))
                 cv2.line(frame,c0,c1,color=colour,thickness=2)
+
+class SalienceAnnotation(DenseAnnotation):
+    def __init__(self, manual, predicted):
+        super().__init__()
+        self.manual = manual
+        self.predicted = predicted
+        self.net = U2NETP()
+        self.net.load_state_dict(torch.load('./pretrained/u2netp.pth',map_location='cpu'))
+        self.net.eval()
+    def render(self, frame, frame_index):
+        height,width,_ = frame.shape
+        pred_anns = self.predicted[frame_index]
+
+        if pred_anns is None:
+            return
+
+        print('FOOOOOOOOOOOOOOOOOOOOOOO')
+        original_frame = frame.copy()
+        updated_frame = frame
+        for p in pred_anns:
+            frame = original_frame
+
+            # Crop
+            #i,j,_,_ = RandomCrop.get_params(frame, crop_size)
+            crop_size = (100,100)
+            j = int(p[0]*width-crop_size[0]//2)
+            i = int(p[1]*height-crop_size[1]//2)
+            frame = CentreCrop.crop_image((i,j), crop_size, frame)
+            crop_top_left = (j,i)
+            # To Tensor
+            to_tensor = torchvision.transforms.ToTensor()
+            frame = to_tensor(frame)
+            # Normalize
+            normalize = Normalize()
+            frame = normalize.transform(frame)
+
+            frame = frame.view(1,3,crop_size[0],crop_size[1])
+            salience = self.net(frame)[0]
+
+            mean = np.array([0.485, 0.456, 0.406])
+            std = np.array([0.229, 0.224, 0.225])
+            unnormalize = torchvision.transforms.Normalize(
+                    mean=-mean/std,
+                    std=1/std,
+                    inplace=False
+            )
+            img = salience.squeeze().detach().numpy()*255
+            updated_frame[i:i+crop_size[1],j:j+crop_size[0],0] = img
+            updated_frame[i:i+crop_size[1],j:j+crop_size[0],1] = img
+            updated_frame[i:i+crop_size[1],j:j+crop_size[0],2] = img
+
+            cv2.imwrite('salience.png',img)
+            print('Saved salience')

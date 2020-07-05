@@ -112,6 +112,17 @@ class App:
                 command=self.state.dec_template_size)
         menu_bar.add_cascade(label="Edit", menu=edit_menu)
 
+        show_annotations = tkinter.BooleanVar()
+        show_salience = tkinter.BooleanVar()
+        def salience_command(*args):
+            print('SALIENCE COMMAND',show_salience.get())
+            self.state.render_salience = show_salience.get()
+            self.render_current_frame()
+        view_menu = tkinter.Menu(menu_bar, tearoff=0)
+        view_menu.add_checkbutton(label="Annotations",variable=show_annotations)
+        view_menu.add_checkbutton(label="Salience",variable=show_salience,command=salience_command)
+        menu_bar.add_cascade(label="View", menu=view_menu)
+
         self.window.config(menu=menu_bar)
 
     def handle_resize(self, event):

@@ -319,6 +319,18 @@ def output_predictions_anchor_box(file_name,x,vis_pred,coord_pred,n=5):
     # Save image
     cv2.imwrite(file_name,output)
 
+def output_salience(file_name,x):
+    mean = np.array([0.485, 0.456, 0.406])
+    std = np.array([0.229, 0.224, 0.225])
+    unnormalize = torchvision.transforms.Normalize(
+            mean=-mean/std,
+            std=1/std,
+            inplace=False
+    )
+
+    img = unnormalize(x).permute(1,2,0).numpy()*255
+    cv2.imwrite(file_name,img)
+
 ####################################################################################################
 
 def train():

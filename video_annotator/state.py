@@ -56,6 +56,8 @@ class State:
         self.background_tasks = []
         self.dirty = False
 
+        self.render_salience = False
+
     def add_callback(self, key, callback):
         self.callbacks[key].append(callback)
     def call_callbacks(self, key):
@@ -268,7 +270,7 @@ class State:
         frame = self.video.get_frame(self.current_frame_index)
         frame = cv2.cvtColor(frame,cv2.COLOR_BGR2RGB)
         if render_annotations:
-            frame = self.annotations.render(frame, self.current_frame_index)
+            frame = self.annotations.render(frame, self.current_frame_index, render_salience=self.render_salience)
         # Compute Zoom Size
         h,w,_ = frame.shape
         zx,zy = self.zoom_centre
