@@ -63,5 +63,40 @@ class Net2(torch.nn.Module):
         coord = self.coordinate(x).view(-1,2,7,7)
         return coord, visible
 
+class Net3(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.base = torchvision.models.resnet50(pretrained=True) # This should work for 50, 101, 152
+        self.seq = torch.nn.Sequential(
+            self.base.conv1,
+            self.base.bn1,
+            self.base.relu,
+            self.base.maxpool,
+            self.base.layer1,
+            self.base.layer2,
+            self.base.layer3,
+            self.base.layer4,
+            self.base.avgpool
+        )
+        self.classifier = torch.nn.Sequential(
+            torch.nn.Linear(in_features=2048,out_features=1024),
+            torch.nn.Linear(in_features=1024,out_features=7*7)
+        )
+        self.coordinate = torch.nn.Sequential(
+            torch.nn.Linear(in_features=2048,out_features=1024),
+            torch.nn.Linear(in_features=1024,out_features=7*7*2),
+            torch.nn.Sigmoid()
+        )
+    def forward(self,x):
+        x = self.seq(x)
+        x = x.view(x.shape[:2])
+        visible = self.classifier(x).view(-1,1,7,7)
+        coord = self.coordinate(x).view(-1,2,7,7)
+        return coord, visible
+
 if __name__=='__main__':
-    model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+    #model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
+    #backbone = torchvision.models.detection.backbone_utils.resnet_fpn_backbone('resnet34',pretrained=True)
+    #net = torchvision.models.resnet34(pretrained=True)
+    net = Net4()
+    x = torch.rand([1,3,224,224])

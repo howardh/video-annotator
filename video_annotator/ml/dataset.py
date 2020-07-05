@@ -19,7 +19,7 @@ import video_annotator
 from video_annotator.annotation import Annotations
 from video_annotator.video import Video
 
-from video_annotator.ml.model import Net, Net2
+from video_annotator.ml.model import Net, Net2, Net3
 from video_annotator.ml.transforms import Scale, RandomScale, RandomCrop, CentreCrop, RandomHorizontalFlip, Normalize, FilterCoords, ToTensor, ToTensorAnchorBox
 from video_annotator.ml.utils import parse_anchor_boxes
 
@@ -518,7 +518,7 @@ def train_anchor_box():
     print('Train set size',len(train_dataset))
     print('Test set size', len(test_dataset))
 
-    net = Net2()
+    net = Net3()
     #for p in net.seq.parameters():
     #    p.requires_grad = False
     net.to(device)
